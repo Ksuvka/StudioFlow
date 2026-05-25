@@ -1,0 +1,1138 @@
+﻿@page "/booking/{StudioId:int}"
+@rendermode InteractiveServer
+@using StudioFlow.Models
+@using StudioFlow.Services
+@inject IUserService UserService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject AppStateService AppStateService
+
+
+<link rel="stylesheet" href="/css/bookings.css"/>
+
+<div class="booking-container">
+    @if (isLoading)
+    {
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>Загрузка...</p>
+        </div>
+    }
+    else if (studio != null)
+    {
+        <div class="booking-header">
+            <h1>Бронирование: @studio.Name</h1>
+            <p>Выберите дату, время и оборудование для съемки</p>
+        </div>
+
+        <div class="booking-content">
+            <div class="booking-form">
+                <div class="form-group">
+                    <label for="bookingDate">Дата съемки</label>
+                    <input type="date" id="bookingDate"
+                           value="@selectedDate?.ToString("yyyy-MM-dd")"
+                           @onchange="OnDateChanged"
+                           min="@DateTime.Now.ToString("yyyy-MM-dd")"
+                           class="form-control" />
+                </div>
+
+                @if (selectedDate.HasValue)
+                {
+                    <div class="form-group">
+                        <label>Выберите время (можно выбрать несколько последовательных слотов)</label>
+                        @if (isLoadingSlots)
+                        {
+                            <div class="loading-slots">Загрузка доступного времени...</div>
+                        }
+                        else if (timeSlots != null && timeSlots.Any())
+                        {
+                            <div class="time-slots">
+                                @foreach (var slot in timeSlots)
+                                {
+                                    <button class="time-slot @(slot.IsSelected ? "selected" : "") @(!slot.IsAvailable ? "unavailable" : "")"
+                                            @onclick="() => ToggleTimeSlot(slot)"
+                                            disabled="@(!slot.IsAvailable)">
+                                        <div class="time">@slot.DisplayTime</div>
+                                        @if (slot.IsAvailable)
+                                        {
+                                            <div class="price">@slot.Price.ToString("N0") ₽</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="booked-label">Занято</div>
+                                        }
+                                    </button>
+                                }
+                            </div>
+                            <div class="selection-info">
+                                <small>Выбрано слотов: @selectedSlots.Count</small>
+                                <small>Общая длительность: @GetTotalDuration() минут</small>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="no-slots">Нет доступных слотов на выбранную дату</div>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="needEquipment" />
+                            <span>Добавить оборудование</span>
+                        </label>
+                    </div>
+
+                    @if (needEquipment && selectedSlots.Any())
+                    {
+                        <div class="form-group">
+                            <label>Выберите оборудование</label>
+                            @if (isLoadingEquipment)
+                            {
+                                <div class="loading-slots">Загрузка оборудования...</div>
+                            }
+                            else
+                            {
+                                @foreach (var category in equipmentByCategory)
+                                {
+                                    <div class="equipment-category">
+                                        <h4>@category.Key</h4>
+                                        <div class="equipment-list">
+                                            @foreach (var item in category.Value)
+                                            {
+                                                var maxAvailable = item.AvailableQuantity;
+                                                <div class="equipment-item">
+                                                    <div class="equipment-info">
+                                                        <div class="equipment-name">@item.Name</div>
+                                                        <div class="equipment-price">@item.RentalPrice ₽/час</div>
+                                                        <div class="equipment-stock">
+                                                            Доступно: @maxAvailable шт. (всего: @item.Quantity шт.)
+                                                        </div>
+                                                    </div>
+                                                    <div class="equipment-quantity">
+                                                        <button class="qty-btn" @onclick="() => ChangeEquipmentQuantity(item, -1)"
+                                                                disabled="@(GetEquipmentQuantity(item.EquipmentId) <= 0)">
+                                                            -
+                                                        </button>
+                                                        <span class="qty-value">@GetEquipmentQuantity(item.EquipmentId)</span>
+                                                        <button class="qty-btn" @onclick="() => ChangeEquipmentQuantity(item, 1)"
+                                                                disabled="@(GetEquipmentQuantity(item.EquipmentId) >= maxAvailable)">
+                                                            +
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+                }
+
+                @if (selectedSlots.Any())
+                {
+                    <div class="form-group">
+                        <label for="comment">Комментарий к бронированию (необязательно)</label>
+                        <textarea id="comment" @bind="comment" class="form-control" rows="3"
+                                  placeholder="Укажите дополнительные пожелания..."></textarea>
+                    </div>
+
+                    <button class="btn-confirm" @onclick="ConfirmBooking" disabled="@isProcessing">
+                        @if (isProcessing)
+                        {
+                            <span>Обработка...</span>
+                        }
+                        else
+                        {
+                            <span>Подтвердить бронирование (общая стоимость: @GetTotalPrice().ToString("N0") ₽)</span>
+                        }
+                    </button>
+                }
+            </div>
+
+            <div class="booking-summary">
+                <h3>Детали бронирования</h3>
+                <div class="summary-item">
+                    <span class="label">Зал:</span>
+                    <span class="value">@studio.Name</span>
+                </div>
+                @if (selectedDate.HasValue)
+                {
+                    <div class="summary-item">
+                        <span class="label">Дата:</span>
+                        <span class="value">@selectedDate.Value.ToString("dd.MM.yyyy")</span>
+                    </div>
+                }
+                @if (selectedSlots.Any())
+                {
+                    <div class="summary-item">
+                        <span class="label">Время:</span>
+                        <span class="value">@GetTimeRange()</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Длительность:</span>
+                        <span class="value">@GetTotalDuration() минут (@(GetTotalDuration() / 60) часов)</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Стоимость зала:</span>
+                        <span class="value">@GetStudioPrice().ToString("N0") ₽</span>
+                    </div>
+                }
+                @if (needEquipment && selectedEquipment.Any())
+                {
+                    <div class="summary-item equipment-summary">
+                        <span class="label">Оборудование:</span>
+                        <span class="value"></span>
+                    </div>
+                    @foreach (var eq in selectedEquipment)
+                    {
+                        var equipment = allEquipment.FirstOrDefault(e => e.EquipmentId == eq.Key);
+                        if (equipment != null)
+                        {
+                            <div class="summary-item equipment-item-summary">
+                                <span class="label">- @equipment.Name x @eq.Value</span>
+                                <span class="value">@((equipment.RentalPrice * eq.Value * (GetTotalDuration() / 60)).ToString("N0")) ₽</span>
+                            </div>
+                        }
+                    }
+                    <div class="summary-item">
+                        <span class="label">Стоимость оборудования:</span>
+                        <span class="value">@GetEquipmentPrice().ToString("N0") ₽</span>
+                    </div>
+                }
+                <div class="summary-item total">
+                    <span class="label">Итого:</span>
+                    <span class="value">@GetTotalPrice().ToString("N0") ₽</span>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="error-message">
+            <h2>Зал не найден</h2>
+            <button class="btn-back" @onclick="GoBack">Вернуться к списку залов</button>
+        </div>
+    }
+</div>
+
+<!-- Модальное окно оплаты -->
+@if (isPaymentModalOpen)
+{
+    <div class="modal-overlay active" @onclick="ClosePaymentModal">
+        <div class="modal-content payment-modal" @onclick:stopPropagation="true">
+            <button class="modal-close-btn" @onclick="ClosePaymentModal">×</button>
+
+            <h3 style="color: var(--gold); margin-bottom: 20px;">Оплата бронирования</h3>
+
+            <div class="payment-booking-info">
+                <div class="info-row">
+                    <span class="label">Студия:</span>
+                    <span class="value">@pendingPaymentStudioName</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Дата:</span>
+                    <span class="value">@pendingPaymentBookingDate.ToString("dd.MM.yyyy")</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Время:</span>
+                    <span class="value">@pendingPaymentSlotTime</span>
+                </div>
+                <div class="info-row total">
+                    <span class="label">Сумма к оплате:</span>
+                    <span class="value price">@pendingPaymentTotal.ToString("N0") ₽</span>
+                </div>
+            </div>
+
+            <div class="payment-form">
+                <div class="form-group">
+                    <label>Номер карты</label>
+                    <input type="text"
+                           class="form-control"
+                           placeholder="0000 0000 0000 0000"
+                           maxlength="19"
+                           value="@cardNumber"
+                           @oninput="OnCardNumberInput" />
+                </div>
+
+                <div class="form-row two-columns">
+                    <div class="form-group">
+                        <label>Срок действия</label>
+                        <input type="text"
+                               class="form-control"
+                               placeholder="MM/YY"
+                               maxlength="5"
+                               value="@cardExpiry"
+                               @oninput="OnExpiryInput" />
+                    </div>
+                    <div class="form-group">
+                        <label>CVV/CVC</label>
+                        <input type="password"
+                               class="form-control"
+                               placeholder="***"
+                               maxlength="3"
+                               @bind="cardCvv"
+                               @bind:event="oninput" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Владелец карты</label>
+                    <input type="text"
+                           class="form-control"
+                           placeholder="IVANOV IVAN"
+                           @bind="cardHolder"
+                           @bind:event="oninput" />
+                </div>
+
+                <div class="payment-security">
+                    <i class="fas fa-lock"></i>
+                    <span>Безопасное соединение. Данные не сохраняются.</span>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-pay-submit" @onclick="ProcessPaymentAfterBooking" disabled="@isPaymentProcessing">
+                    @if (isPaymentProcessing)
+                    {
+                        <span>Обработка...</span>
+                    }
+                    else
+                    {
+                        <span>Оплатить @pendingPaymentTotal.ToString("N0") ₽</span>
+                    }
+                </button>
+                <button class="btn-secondary" @onclick="ClosePaymentModal">Отмена</button>
+            </div>
+        </div>
+    </div>
+}
+<!-- Модальное окно для регистрации/входа при бронировании -->
+@if (isAuthModalOpen)
+{
+    <div class="modal-overlay active" @onclick="CloseAuthModal">
+        <div class="modal-content auth-modal" @onclick:stopPropagation="true">
+            <button class="modal-close-btn" @onclick="CloseAuthModal">×</button>
+
+            <h3 style="color: var(--gold); margin-bottom: 20px; text-align: center;">
+                @(activeAuthTab == "login" ? "Вход в аккаунт" : "Создание аккаунта")
+            </h3>
+
+            <div class="auth-tabs">
+                <button class="auth-tab-btn @(activeAuthTab == "login" ? "active" : "")"
+                        @onclick='() => SwitchAuthTab("login")'>
+                    Вход
+                </button>
+                <button class="auth-tab-btn @(activeAuthTab == "register" ? "active" : "")"
+                        @onclick='() => SwitchAuthTab("register")'>
+                    Регистрация
+                </button>
+            </div>
+
+            <!-- Форма входа -->
+            @if (activeAuthTab == "login")
+            {
+                <div class="auth-form">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" class="form-control" @bind="loginModel.Email" placeholder="ivanov@example.com" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Пароль</label>
+                        <input type="password" class="form-control" @bind="loginModel.Password" placeholder="••••••" />
+                    </div>
+
+                    <div class="auth-buttons">
+                        <button class="btn-primary" @onclick="LoginAndContinue" disabled="@isAuthProcessing">
+                            @if (isAuthProcessing)
+                            {
+                                <span>Вход...</span>
+                            }
+                            else
+                            {
+                                <span>Войти и продолжить бронирование</span>
+                            }
+                        </button>
+                    </div>
+
+                    <div class="auth-info">
+                        <i class="fas fa-info-circle"></i>
+                        <span>После входа бронирование привяжется к вашему аккаунту</span>
+                    </div>
+                </div>
+            }
+
+            <!-- Форма регистрации -->
+            @if (activeAuthTab == "register")
+            {
+                <div class="auth-form">
+                    <div class="form-group">
+                        <label>ФИО *</label>
+                        <input type="text" class="form-control" @bind="registrationModel.FullName" placeholder="Иванов Иван Иванович" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Email *</label>
+                        <input type="email" class="form-control" @bind="registrationModel.Email" placeholder="ivanov@example.com" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Телефон</label>
+                        <input type="tel" class="form-control" @bind="registrationModel.Phone" placeholder="+7 (999) 123-45-67" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Пароль *</label>
+                        <input type="password" class="form-control" @bind="registrationModel.Password" placeholder="минимум 6 символов" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Подтверждение пароля *</label>
+                        <input type="password" class="form-control" @bind="registrationModel.ConfirmPassword" placeholder="повторите пароль" />
+                    </div>
+
+                    <div class="auth-buttons">
+                        <button class="btn-primary" @onclick="RegisterAndContinue" disabled="@isAuthProcessing">
+                            @if (isAuthProcessing)
+                            {
+                                <span>Регистрация...</span>
+                            }
+                            else
+                            {
+                                <span>Зарегистрироваться и продолжить</span>
+                            }
+                        </button>
+                    </div>
+
+                    <div class="auth-info">
+                        <i class="fas fa-info-circle"></i>
+                        <span>После регистрации все бронирования будут отображаться в личном кабинете</span>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int StudioId { get; set; }
+
+    private StudioViewModel? studio;
+    private DateTime? selectedDate;
+    private List<TimeSlotViewModel> timeSlots = new();
+    private List<TimeSlotViewModel> selectedSlots = new();
+    private bool needEquipment = false;
+    private List<EquipmentViewModel> allEquipment = new();
+    private Dictionary<string, List<EquipmentViewModel>> equipmentByCategory = new();
+    private Dictionary<int, int> selectedEquipment = new(); 
+    private string comment = "";
+    private bool isLoading = true;
+    private bool isLoadingSlots = false;
+    private bool isLoadingEquipment = false;
+    private bool isProcessing = false;
+    private bool isPaymentModalOpen = false;
+    private bool isPaymentProcessing = false;
+    private int pendingPaymentBookingId = 0;
+    private decimal pendingPaymentTotal = 0;
+    private string pendingPaymentStudioName = "";
+    private DateTime pendingPaymentBookingDate;
+    private string pendingPaymentSlotTime = "";
+    private string cardNumber = "";
+    private string cardExpiry = "";
+    private string cardCvv = "";
+    private string cardHolder = "";
+    private bool isAuthModalOpen = false;
+    private bool isAuthProcessing = false;
+    private string activeAuthTab = "login";
+    private LoginModel loginModel = new();
+    private RegistrationModel registrationModel = new();
+
+    public class LoginModel
+    {
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+
+    public class RegistrationModel
+    {
+        public string FullName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Phone { get; set; } = "";
+        public string Password { get; set; } = "";
+        public string ConfirmPassword { get; set; } = "";
+    }
+
+    private void OpenAuthModal()
+    {
+        loginModel = new LoginModel();
+        registrationModel = new RegistrationModel();
+        activeAuthTab = "login";
+        isAuthModalOpen = true;
+        StateHasChanged();
+    }
+
+    private void CloseAuthModal()
+    {
+        isAuthModalOpen = false;
+        StateHasChanged();
+    }
+
+    private void SwitchAuthTab(string tab)
+    {
+        activeAuthTab = tab;
+        StateHasChanged();
+    }
+
+    private async Task LoginAndContinue()
+    {
+        if (string.IsNullOrWhiteSpace(loginModel.Email))
+        {
+            await JS.InvokeVoidAsync("alert", "Введите email");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(loginModel.Password))
+        {
+            await JS.InvokeVoidAsync("alert", "Введите пароль");
+            return;
+        }
+
+        isAuthProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            var user = await UserService.AuthenticateAsync(loginModel.Email, loginModel.Password);
+
+            if (user == null)
+            {
+                await JS.InvokeVoidAsync("alert", "Неверный email или пароль. Попробуйте снова или зарегистрируйтесь.");
+                return;
+            }
+
+            await LoginUser(user);
+            CloseAuthModal();
+
+            await ContinueBookingAfterAuth();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during login: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Ошибка при входе. Попробуйте позже.");
+        }
+        finally
+        {
+            isAuthProcessing = false;
+        }
+    }
+
+    private async Task RegisterAndContinue()
+    {
+
+        if (string.IsNullOrWhiteSpace(registrationModel.FullName))
+        {
+            await JS.InvokeVoidAsync("alert", "Введите ФИО");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(registrationModel.Email))
+        {
+            await JS.InvokeVoidAsync("alert", "Введите email");
+            return;
+        }
+
+        if (!IsValidEmail(registrationModel.Email))
+        {
+            await JS.InvokeVoidAsync("alert", "Введите корректный email");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(registrationModel.Password))
+        {
+            await JS.InvokeVoidAsync("alert", "Введите пароль");
+            return;
+        }
+
+        if (registrationModel.Password.Length < 6)
+        {
+            await JS.InvokeVoidAsync("alert", "Пароль должен содержать минимум 6 символов");
+            return;
+        }
+
+        if (registrationModel.Password != registrationModel.ConfirmPassword)
+        {
+            await JS.InvokeVoidAsync("alert", "Пароли не совпадают");
+            return;
+        }
+
+        isAuthProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            var userExists = await UserService.UserExistsAsync(registrationModel.Email);
+
+            if (userExists)
+            {
+                await JS.InvokeVoidAsync("alert", "Пользователь с таким email уже существует. Пожалуйста, войдите в аккаунт.");
+                return;
+            }
+            var success = await UserService.CreateUserAsync(
+                registrationModel.FullName,
+                registrationModel.Email,
+                registrationModel.Password,
+                registrationModel.Phone,
+                "Client"
+            );
+
+            if (!success)
+            {
+                await JS.InvokeVoidAsync("alert", "Ошибка при регистрации. Попробуйте позже.");
+                return;
+            }
+
+            var newUser = await UserService.AuthenticateAsync(registrationModel.Email, registrationModel.Password);
+            if (newUser != null)
+            {
+                await LoginUser(newUser);
+            }
+
+            CloseAuthModal();
+
+            await ContinueBookingAfterAuth();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during registration: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Ошибка при регистрации. Попробуйте позже.");
+        }
+        finally
+        {
+            isAuthProcessing = false;
+        }
+    }
+
+    private async Task LoginUser(User user)
+    {
+        string roleName = user.Role?.RoleName ?? "Client";
+
+        await JS.InvokeVoidAsync("localStorage.setItem", "userId", user.UserId.ToString());
+        await JS.InvokeVoidAsync("localStorage.setItem", "userEmail", user.Email);
+        await JS.InvokeVoidAsync("localStorage.setItem", "userName", user.FullName);
+        await JS.InvokeVoidAsync("localStorage.setItem", "userRole", roleName);
+        await JS.InvokeVoidAsync("localStorage.setItem", "isAuthenticated", "true");
+
+        AppStateService.IsAuthenticated = true;
+        AppStateService.UserName = user.FullName;
+        AppStateService.UserRole = roleName;
+    }
+
+    private async Task ContinueBookingAfterAuth()
+    {
+        isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            bool allSuccess = true;
+            int lastBookingId = 0;
+
+            var userId = await JS.InvokeAsync<string>("localStorage.getItem", "userId");
+            if (string.IsNullOrEmpty(userId))
+            {
+                await JS.InvokeVoidAsync("alert", "Ошибка авторизации. Попробуйте снова.");
+                return;
+            }
+
+            foreach (var slot in selectedSlots)
+            {
+                var equipmentList = selectedEquipment.Select(eq => (eq.Key, eq.Value)).ToList();
+
+                var success = await UserService.CreateBookingAsync(
+                    int.Parse(userId),
+                    StudioId,
+                    slot.SlotId,
+                    selectedDate.Value,
+                    comment,
+                    equipmentList
+                );
+
+                if (success)
+                {
+                    var bookings = await UserService.GetUserBookingsWithEquipmentAsync(int.Parse(userId));
+                    lastBookingId = bookings.OrderByDescending(b => b.BookingId).FirstOrDefault()?.BookingId ?? 0;
+                }
+                else
+                {
+                    allSuccess = false;
+                    break;
+                }
+            }
+
+            if (allSuccess && lastBookingId > 0)
+            {
+               
+                var firstSlot = selectedSlots.First();
+                OpenPaymentModal(lastBookingId, GetTotalPrice(), studio!.Name, selectedDate.Value, firstSlot.DisplayTime);
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Ошибка при создании бронирования. Некоторые слоты или оборудование могли быть уже заняты.");
+                await LoadTimeSlots();
+                if (selectedSlots.Any())
+                {
+                    await LoadAvailableEquipment();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating booking: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Произошла ошибка. Попробуйте позже.");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private bool IsValidEmail(string email)
+    {
+        try
+        {
+            var regex = new System.Text.RegularExpressions.Regex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$");
+            return regex.IsMatch(email);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+
+    private void OnCardNumberInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString()?.Replace(" ", "") ?? "";
+        if (value.Length > 16) value = value[..16];
+
+        var formatted = "";
+        for (int i = 0; i < value.Length; i++)
+        {
+            if (i > 0 && i % 4 == 0)
+                formatted += " ";
+            formatted += value[i];
+        }
+        cardNumber = formatted;
+        StateHasChanged();
+    }
+
+    private void OnExpiryInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString()?.Replace("/", "") ?? "";
+        if (value.Length > 4) value = value[..4];
+
+        if (value.Length >= 3)
+        {
+            cardExpiry = $"{value[..2]}/{value[2..]}";
+        }
+        else
+        {
+            cardExpiry = value;
+        }
+        StateHasChanged();
+    }
+
+    private bool ValidatePaymentForm()
+    {
+        var cardNumberClean = cardNumber.Replace(" ", "");
+        if (cardNumberClean.Length != 16)
+        {
+            JS.InvokeVoidAsync("alert", "Введите корректный номер карты (16 цифр)");
+            return false;
+        }
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(cardExpiry, @"^(0[1-9]|1[0-2])\/(2[5-9]|[3-9][0-9])$"))
+        {
+            JS.InvokeVoidAsync("alert", "Введите корректную дату окончания (MM/YY)");
+            return false;
+        }
+
+        if (cardCvv.Length != 3 || !System.Text.RegularExpressions.Regex.IsMatch(cardCvv, @"^\d{3}$"))
+        {
+            JS.InvokeVoidAsync("alert", "Введите корректный CVV код (3 цифры)");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(cardHolder) || cardHolder.Length < 3)
+        {
+            JS.InvokeVoidAsync("alert", "Введите имя владельца карты");
+            return false;
+        }
+
+        return true;
+    }
+
+    private void OpenPaymentModal(int bookingId, decimal totalPrice, string studioName, DateTime bookingDate, string slotTime)
+    {
+        pendingPaymentBookingId = bookingId;
+        pendingPaymentTotal = totalPrice;
+        pendingPaymentStudioName = studioName;
+        pendingPaymentBookingDate = bookingDate;
+        pendingPaymentSlotTime = slotTime;
+        isPaymentModalOpen = true;
+
+        cardNumber = "";
+        cardExpiry = "";
+        cardCvv = "";
+        cardHolder = "";
+        StateHasChanged();
+    }
+
+    private void ClosePaymentModal()
+    {
+        isPaymentModalOpen = false;
+        StateHasChanged();
+    }
+
+    private async Task ProcessPaymentAfterBooking()
+    {
+        if (!ValidatePaymentForm()) return;
+
+        isPaymentProcessing = true;
+        StateHasChanged();
+
+        await Task.Delay(1500);
+
+        try
+        {
+            var success = await UserService.PayForBookingAfterCreationAsync(pendingPaymentBookingId);
+
+            if (success)
+            {
+                await JS.InvokeVoidAsync("alert", "Бронирование создано и оплачено! Ожидайте подтверждения менеджера.");
+                ClosePaymentModal();
+                Navigation.NavigateTo("/profile", true);
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Бронирование создано, но ошибка при оплате. Оплатите позже в профиле.");
+                Navigation.NavigateTo("/profile", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error processing payment: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Ошибка при оплате");
+        }
+        finally
+        {
+            isPaymentProcessing = false;
+        }
+    }
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadStudio();
+            await LoadEquipment();
+            selectedDate = DateTime.Now.AddDays(1).Date;
+            await LoadTimeSlots();
+            StateHasChanged();
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/studios");
+    }
+
+    private async Task LoadStudio()
+    {
+        isLoading = true;
+        try
+        {
+            studio = await UserService.GetStudioByIdAsync(StudioId);
+            if (studio == null)
+            {
+                Navigation.NavigateTo("/studios");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading studio: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadEquipment()
+    {
+        isLoadingEquipment = true;
+        try
+        {
+            allEquipment = await UserService.GetAllEquipmentAsync();
+            equipmentByCategory = allEquipment
+                .GroupBy(e => e.Category)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading equipment: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingEquipment = false;
+        }
+    }
+
+    private async Task LoadAvailableEquipment()
+    {
+        if (!selectedDate.HasValue || !selectedSlots.Any())
+        {
+            Console.WriteLine("LoadAvailableEquipment: No date or slots selected");
+            return;
+        }
+
+        isLoadingEquipment = true;
+        StateHasChanged();
+
+        try
+        {
+            var slotIds = selectedSlots.Select(s => s.SlotId).ToList();
+            Console.WriteLine($"LoadAvailableEquipment: date={selectedDate.Value:yyyy-MM-dd}, slots={string.Join(",", slotIds)}");
+
+            var availableEquipment = await UserService.GetAvailableEquipmentForTimeAsync(StudioId, selectedDate.Value, slotIds);
+
+            foreach (var equipment in allEquipment)
+            {
+                var available = availableEquipment.FirstOrDefault(e => e.EquipmentId == equipment.EquipmentId);
+                if (available != null)
+                {
+                    equipment.AvailableQuantity = available.AvailableQuantity;
+                    Console.WriteLine($"Equipment {equipment.Name}: Available={equipment.AvailableQuantity}");
+                }
+                else
+                {
+                    equipment.AvailableQuantity = 0;
+                }
+            }
+
+            equipmentByCategory = allEquipment
+                .Where(e => e.AvailableQuantity > 0 || selectedEquipment.ContainsKey(e.EquipmentId))
+                .GroupBy(e => e.Category)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var toRemove = selectedEquipment.Keys
+                .Where(id => allEquipment.First(e => e.EquipmentId == id).AvailableQuantity == 0)
+                .ToList();
+
+            foreach (var id in toRemove)
+            {
+                Console.WriteLine($"Removing equipment {id} because it's no longer available");
+                selectedEquipment.Remove(id);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading available equipment: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
+        finally
+        {
+            isLoadingEquipment = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnDateChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && DateTime.TryParse(e.Value.ToString(), out DateTime date))
+        {
+            selectedDate = date;
+            selectedSlots.Clear();
+            selectedEquipment.Clear();
+            await LoadTimeSlots();
+        }
+    }
+
+    private async Task LoadTimeSlots()
+    {
+        if (!selectedDate.HasValue) return;
+
+        isLoadingSlots = true;
+        selectedSlots.Clear();
+        selectedEquipment.Clear();
+        StateHasChanged();
+
+        try
+        {
+            Console.WriteLine($"Loading time slots for studio {StudioId} on date {selectedDate.Value:yyyy-MM-dd}");
+            timeSlots = await UserService.GetAvailableTimeSlotsAsync(StudioId, selectedDate.Value);
+            Console.WriteLine($"Loaded {timeSlots.Count} slots, Available: {timeSlots.Count(s => s.IsAvailable)}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading time slots: {ex.Message}");
+            timeSlots = new List<TimeSlotViewModel>();
+        }
+        finally
+        {
+            isLoadingSlots = false;
+            StateHasChanged();
+        }
+    }
+
+    private int GetEquipmentQuantity(int equipmentId)
+    {
+        return selectedEquipment.ContainsKey(equipmentId) ? selectedEquipment[equipmentId] : 0;
+    }
+
+    private void ChangeEquipmentQuantity(EquipmentViewModel equipment, int delta)
+    {
+        var currentQty = GetEquipmentQuantity(equipment.EquipmentId);
+        var newQty = currentQty + delta;
+        var maxAvailable = equipment.AvailableQuantity;
+
+        if (newQty <= 0)
+        {
+            selectedEquipment.Remove(equipment.EquipmentId);
+        }
+        else if (newQty <= maxAvailable)
+        {
+            selectedEquipment[equipment.EquipmentId] = newQty;
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task ToggleTimeSlot(TimeSlotViewModel slot)
+    {
+        if (!slot.IsAvailable) return;
+
+        if (slot.IsSelected)
+        {
+            selectedSlots.Remove(slot);
+            slot.IsSelected = false;
+        }
+        else
+        {
+            if (CanAddSlot(slot))
+            {
+                selectedSlots.Add(slot);
+                selectedSlots = selectedSlots.OrderBy(s => s.StartTime).ToList();
+                slot.IsSelected = true;
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Можно выбирать только последовательные временные слоты. Выберите время подряд.");
+                return;
+            }
+        }
+
+        await LoadAvailableEquipment();
+        StateHasChanged();
+    }
+
+    private bool CanAddSlot(TimeSlotViewModel newSlot)
+    {
+        if (!selectedSlots.Any()) return true;
+
+        var orderedSlots = selectedSlots.OrderBy(s => s.StartTime).ToList();
+        var firstSlot = orderedSlots.First();
+        var lastSlot = orderedSlots.Last();
+
+        if (newSlot.EndTime == firstSlot.StartTime)
+        {
+            return true;
+        }
+        else if (newSlot.StartTime == lastSlot.EndTime)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private string GetTimeRange()
+    {
+        if (!selectedSlots.Any()) return "";
+
+        var orderedSlots = selectedSlots.OrderBy(s => s.StartTime).ToList();
+        var firstSlot = orderedSlots.First();
+        var lastSlot = orderedSlots.Last();
+
+        return $"{firstSlot.StartTime:hh\\:mm} - {lastSlot.EndTime:hh\\:mm}";
+    }
+
+    private int GetTotalDuration()
+    {
+        return selectedSlots.Sum(s => s.DurationMinutes);
+    }
+
+    private decimal GetStudioPrice()
+    {
+        return selectedSlots.Sum(s => s.Price);
+    }
+
+    private decimal GetEquipmentPrice()
+    {
+        if (!needEquipment || !selectedEquipment.Any()) return 0;
+
+        var hours = GetTotalDuration() / 60;
+        if (hours == 0) return 0;
+
+        decimal total = 0;
+
+        foreach (var eq in selectedEquipment)
+        {
+            var equipment = allEquipment.FirstOrDefault(e => e.EquipmentId == eq.Key);
+            if (equipment != null)
+            {
+                total += equipment.RentalPrice * eq.Value * hours;
+            }
+        }
+
+        return total;
+    }
+
+    private decimal GetTotalPrice()
+    {
+        return GetStudioPrice() + GetEquipmentPrice();
+    }
+
+    private async Task ConfirmBooking()
+    {
+        if (!selectedDate.HasValue || !selectedSlots.Any())
+        {
+            await JS.InvokeVoidAsync("alert", "Пожалуйста, выберите дату и время");
+            return;
+        }
+
+        var userId = await JS.InvokeAsync<string>("localStorage.getItem", "userId");
+
+        if (string.IsNullOrEmpty(userId))
+        {
+            OpenAuthModal();
+            return;
+        }
+
+        await ContinueBookingAfterAuth();
+    }
+    private async Task OnBookingCreated(int bookingId, decimal totalPrice, string studioName, DateTime bookingDate, string slotTime)
+    {
+        pendingPaymentBookingId = bookingId;
+        pendingPaymentTotal = totalPrice;
+        pendingPaymentStudioName = studioName;
+        pendingPaymentBookingDate = bookingDate;
+        pendingPaymentSlotTime = slotTime;
+        isPaymentModalOpen = true;
+        StateHasChanged();
+    }
+
+  
+}

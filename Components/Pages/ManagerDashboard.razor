@@ -1,0 +1,1081 @@
+﻿@page "/manager"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using StudioFlow.Services
+@using StudioFlow.Models
+@using Microsoft.AspNetCore.Components.Forms
+@inject IUserService UserService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject AppStateService AppStateService
+@inject AuthService AuthService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>StudioFlow - Менеджер</PageTitle>
+<link rel="stylesheet" href="css/manager.css" />
+
+<div class="manager-container">
+    @if (isLoading)
+    {
+        <div style="text-align: center; padding: 50px;">
+            <div class="loader"></div>
+            <h3 style="color: var(--text-gray); margin-top: 20px;">Загрузка...</h3>
+        </div>
+    }
+    else
+    {
+        <div class="manager-card">
+            <!-- Шапка -->
+            <div class="manager-header">
+                <div class="manager-header-info">
+                    <h1>Панель менеджера</h1>
+                    <p>Добро пожаловать, @managerName!</p>
+                </div>
+                <button class="btn-logout" @onclick="Logout">Выйти</button>
+            </div>
+
+            <!-- Вкладки -->
+            <div class="tab-conteiner">
+            <button class="tab-btn @(activeTab == "bookings" ? "active" : "")"
+                    @onclick="ShowBookingsTab">
+                Все бронирования
+            </button>
+                <button class="tab-btn @(activeTab == "create" ? "active" : "")"
+                    @onclick="ShowCreateTab">
+                Добавить бронь
+            </button>
+                <button class="tab-btn @(activeTab == "clients" ? "active" : "")"
+                    @onclick="ShowClientsTab">
+                Клиент
+            </button>
+            </div>
+
+            <div class="manager-content">
+                <!-- Вкладка: Все бронирования -->
+                @if (activeTab == "bookings")
+                {
+                    <div class="bookings-tab">
+                        <div class="search-filter">
+                            <input type="text"
+                                   placeholder="Поиск по клиенту, студии..."
+                                   @bind="bookingSearchTerm"
+                                   @bind:event="oninput"
+                                   class="search-input" />
+                            <select @bind="bookingStatusFilter" class="status-filter">
+                                <option value="all">Все статусы</option>
+                                <option value="paid">Ожидает</option>
+                                <option value="confirmed">Подтверждено</option>
+                                <option value="completed">Завершено</option>
+                                <option value="cancelled">Отменено</option>
+                            </select>
+                        </div>
+
+                        @if (filteredBookings.Any())
+                        {
+                            <div class="bookings-table-container">
+                                <table class="bookings-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Клиент</th>
+                                            <th>Студия</th>
+                                            <th>Дата</th>
+                                            <th>Время</th>
+                                            <th>Стоимость</th>
+                                            <th>Статус</th>
+                                            <th>Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var booking in filteredBookings)
+                                        {
+                                            <tr>
+                                                <td>@booking.BookingId</td>
+                                                <td>@booking.ClientName</td>
+                                                <td>@booking.StudioName</td>
+                                                <td>@booking.BookingDate.ToString("dd.MM.yyyy")</td>
+                                                <td>@booking.SlotTime</td>
+                                                <td>@booking.TotalPrice.ToString("N0") ₽</td>
+                                                <td>
+                                                    <span class="status-badge status-@booking.Status">
+                                                        @GetStatusText(booking.Status)
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <button class="btn-small btn-details" @onclick="() => ViewBookingDetails(booking)">
+                                                        Детали
+                                                    </button>
+                                                    @if (booking.Status == "paid")
+                                                    {
+                                                        <button class="btn-small btn-confirm" @onclick="() => ConfirmBooking(booking.BookingId)">
+                                                            Подтвердить
+                                                        </button>
+                                                    }
+                                                    @if (booking.Status == "confirmed")
+                                                    {
+                                                        <button class="btn-small btn-complete" @onclick="() => CompleteBooking(booking.BookingId)">
+                                                            Завершить
+                                                        </button>
+                                                    }
+                                                    @if (booking.Status == "paid" || booking.Status == "confirmed")
+                                                    {
+                                                        <button class="btn-small btn-cancel" @onclick="() => CancelBookingByManager(booking.BookingId)">
+                                                            Отменить
+                                                        </button>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="empty-state">
+                                <p>Нет бронирований</p>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Вкладка: Создание бронирования -->
+                @if (activeTab == "create")
+                {
+                    <div class="create-booking-tab">
+                        <div class="form-section">
+                            <h3>Выбор клиента</h3>
+                            <div class="client-search">
+                                <input type="text"
+                                       placeholder="Поиск клиента по имени или email..."
+                                       @bind="clientSearchTerm"
+                                       @bind:event="oninput"
+                                       class="search-input" />
+                                @if (filteredClients.Any())
+                                {
+                                    <div class="clients-list">
+                                        @foreach (var client in filteredClients)
+                                        {
+                                            <div class="client-item @(selectedClient?.UserId == client.UserId ? "selected" : "")"
+                                                 @onclick="() => SelectClient(client)">
+                                                <div class="client-name">@client.FullName</div>
+                                                <div class="client-email">@client.Email</div>
+                                                <div class="client-phone">@(string.IsNullOrEmpty(client.Phone) ? "Нет телефона" : client.Phone)</div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="empty-state-small">Клиенты не найдены</div>
+                                }
+                            </div>
+                        </div>
+
+                        @if (selectedClient != null)
+                        {
+                            <div class="form-section">
+                                <h3>Выбор студии</h3>
+                                <div class="studios-grid">
+                                    @foreach (var studio in studios)
+                                    {
+                                        <div class="studio-item @(selectedStudio?.StudioId == studio.StudioId ? "selected" : "")"
+                                             @onclick="() => SelectStudio(studio)">
+                                            <div class="studio-name">@studio.Name</div>
+                                            <div class="studio-price">@studio.BasePrice.ToString("N0") ₽/час</div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        @if (selectedStudio != null)
+                        {
+                            <div class="form-section">
+                                <h3>Выбор даты</h3>
+                                <input type="date"
+                                       value="@bookingDate?.ToString("yyyy-MM-dd")"
+                                       @onchange="OnDateChanged"
+                                       min="@DateTime.Now.ToString("yyyy-MM-dd")"
+                                       class="date-input" />
+                            </div>
+
+                            <div class="form-section">
+                                <h3>Выбор времени</h3>
+                                @if (isLoadingSlots)
+                                {
+                                    <div class="loading-slots">Загрузка...</div>
+                                }
+                                else if (availableTimeSlots.Any())
+                                {
+                                    <div class="time-slots">
+                                        @foreach (var slot in availableTimeSlots)
+                                        {
+                                            <button class="time-slot @(selectedSlots.Contains(slot) ? "selected" : "") @(!slot.IsAvailable ? "unavailable" : "")"
+                                                    @onclick="() => ToggleTimeSlot(slot)"
+                                                    disabled="@(!slot.IsAvailable)">
+                                                <div class="time">@slot.DisplayTime</div>
+                                                @if (slot.IsAvailable)
+                                                {
+                                                    <div class="price">@slot.Price.ToString("N0") ₽</div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="booked-label">Занято</div>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
+                                    <div class="selection-info">
+                                        <small>Выбрано слотов: @selectedSlots.Count</small>
+                                        <small>Длительность: @(GetTotalDuration()) минут</small>
+                                    </div>
+                                }
+                                else if (bookingDate.HasValue)
+                                {
+                                    <div class="no-slots">Нет доступных слотов на выбранную дату</div>
+                                }
+                            </div>
+
+                            <div class="form-section">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" @bind="needEquipment" />
+                                    <span>Добавить оборудование</span>
+                                </label>
+                            </div>
+
+                            @if (needEquipment && selectedSlots.Any())
+                            {
+                                <div class="form-section">
+                                    <h3>Оборудование</h3>
+                                    @if (isLoadingEquipment)
+                                    {
+                                        <div>Загрузка оборудования...</div>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var category in equipmentByCategory)
+                                        {
+                                            <div class="equipment-category">
+                                                <h4>@category.Key</h4>
+                                                <div class="equipment-list">
+                                                    @foreach (var item in category.Value)
+                                                    {
+                                                        <div class="equipment-item">
+                                                            <div class="equipment-info">
+                                                                <div class="equipment-name">@item.Name</div>
+                                                                <div class="equipment-price">@item.RentalPrice.ToString("N0") ₽/час</div>
+                                                                <div class="equipment-stock">
+                                                                    Доступно: @item.AvailableQuantity шт.
+                                                                </div>
+                                                            </div>
+                                                            <div class="equipment-quantity">
+                                                                <button class="qty-btn" @onclick="() => ChangeEquipmentQuantity(item, -1)"
+                                                                        disabled="@(GetEquipmentQuantity(item.EquipmentId) <= 0)">
+                                                                    -
+                                                                </button>
+                                                                <span class="qty-value">@GetEquipmentQuantity(item.EquipmentId)</span>
+                                                                <button class="qty-btn" @onclick="() => ChangeEquipmentQuantity(item, 1)"
+                                                                        disabled="@(GetEquipmentQuantity(item.EquipmentId) >= item.AvailableQuantity)">
+                                                                    +
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            }
+
+                            @if (selectedSlots.Any())
+                            {
+                                <div class="form-section">
+                                 
+                                    <textarea @bind="bookingComment" class="comment-input" rows="3"
+                                              placeholder="Комментарий к бронированию..."></textarea>
+                                </div>
+
+                                <div class="booking-summary">
+                                    <h3>Итого</h3>
+                                    <div class="summary-item">
+                                        <span>Студия:</span>
+                                        <span>@selectedStudio.Name</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span>Дата:</span>
+                                        <span>@bookingDate?.ToString("dd.MM.yyyy")</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span>Время:</span>
+                                        <span>@GetTimeRange()</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span>Стоимость зала:</span>
+                                        <span>@GetStudioPrice().ToString("N0") ₽</span>
+                                    </div>
+                                    @if (needEquipment && selectedEquipment.Any())
+                                    {
+                                        <div class="summary-item">
+                                            <span>Оборудование:</span>
+                                            <span>@GetEquipmentPrice().ToString("N0") ₽</span>
+                                        </div>
+                                    }
+                                    <div class="summary-item total">
+                                        <span>Общая стоимость:</span>
+                                        <span>@GetTotalPrice().ToString("N0") ₽</span>
+                                    </div>
+                                </div>
+
+                                <button class="btn-confirm" @onclick="CreateBookingForClient" disabled="@isProcessing">
+                                    @if (isProcessing)
+                                    {
+                                        <span>Создание...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Создать бронирование</span>
+                                    }
+                                </button>
+                            }
+                        }
+                    </div>
+                }
+
+                <!-- Вкладка: Клиенты -->
+                @if (activeTab == "clients")
+                {
+                    <div class="clients-tab">
+                        <div class="search-filter">
+                            <input type="text"
+                                   placeholder="Поиск по имени или email..."
+                                   @bind="clientListSearchTerm"
+                                   @bind:event="oninput"
+                                   class="search-input" />
+                        </div>
+
+                        @if (filteredClientList.Any())
+                        {
+                            <div class="clients-table-container">
+                                <table class="clients-table">
+                                    <thead>
+                                        <tr>
+                                            
+                                            <th>ФИО</th>
+                                            <th>Email</th>
+                                            <th>Телефон</th>
+                                            <th>Дата регистрации</th>
+                                            <th>Всего броней</th>
+                                            <th>Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var client in filteredClientList)
+                                        {
+                                            <tr>
+                                              
+                                                <td>@client.FullName</td>
+                                                <td>@client.Email</td>
+                                                <td class="phone-column">@(string.IsNullOrEmpty(client.Phone) ? "-" : client.Phone)</td>
+                                                <td>@client.CreatedAt.ToString("dd.MM.yyyy")</td>
+                                                <td>@client.TotalBookings</td>
+                                                <td>
+                                                    <button class="btn-small btn-create" @onclick="() => SelectClientForBooking(client)">
+                                                        Создать бронь
+                                                    </button>
+                                                    <button class="btn-small btn-bookings" @onclick="() => ViewClientBookings(client)">
+                                                        Брони
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="empty-state">
+                                <p>Клиенты не найдены</p>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Модальное окно деталей бронирования -->
+        @if (selectedBookingDetails != null)
+        {
+            <div class="modal-overlay active" @onclick="CloseBookingDetails">
+                <div class="modal-content" @onclick:stopPropagation="true">
+
+                    <button class="modal-close-btn" @onclick="CloseBookingDetails">×</button>
+
+                    <h3 class="modal-title">Детали бронирования</h3>
+
+                    <!-- Основная информация -->
+                    <div class="booking-details-grid">
+                        <span class="detail-label">Клиент:</span>
+                        <span class="detail-value">@selectedBookingDetails.ClientName</span>
+
+                        <span class="detail-label">Студия:</span>
+                        <span class="detail-value">@selectedBookingDetails.StudioName</span>
+
+                        <span class="detail-label">Дата:</span>
+                        <span class="detail-value">@selectedBookingDetails.BookingDate.ToString("dd.MM.yyyy")</span>
+
+                        <span class="detail-label">Время:</span>
+                        <span class="detail-value">@selectedBookingDetails.SlotTime</span>
+
+                        <span class="detail-label">Статус:</span>
+                        <span class="detail-value">@GetStatusText(selectedBookingDetails.Status)</span>
+
+                        <span class="detail-label">Стоимость:</span>
+                        <span class="detail-value" style="color: #ffd700; font-weight: 600;">@selectedBookingDetails.TotalPrice.ToString("N0") ₽</span>
+                    </div>
+
+                    <!-- Комментарий (если есть) -->
+                    @if (!string.IsNullOrEmpty(selectedBookingDetails.Comment))
+                    {
+                        <div class="comment-block">
+                            <span class="comment-label">Комментарий</span>
+                            <p class="comment-text">@selectedBookingDetails.Comment</p>
+                        </div>
+                    }
+
+                    <!-- Оборудование -->
+                    <div class="equipment-section">
+                        <h4 class="equipment-title">Оборудование:</h4>
+                        @if (selectedBookingDetails.EquipmentList.Any())
+                        {
+                            <ul class="equipment-list">
+                                @foreach (var eq in selectedBookingDetails.EquipmentList)
+                                {
+                                    <li class="equipment-item">
+                                        <span>@eq.Name <small style="color:#888">(@eq.Quantity шт.)</small></span>
+                                        <span class="equipment-price">@eq.RentalPrice.ToString("N0") ₽</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p class="no-equipment">Нет оборудования</p>
+                        }
+                    </div>
+
+                    <!-- Кнопка закрытия -->
+                    <button class="btn-close-modal" @onclick="CloseBookingDetails">Закрыть</button>
+                </div>
+            </div>
+        }
+        }
+    }
+
+ <!-- Модальное окно бронирований клиента -->
+@if (isClientBookingsModalOpen && selectedClientForModal != null)
+{
+    <div class="modal-overlay active" @onclick="CloseClientBookingsModal">
+        <div class="modal-content client-bookings-modal" @onclick:stopPropagation="true">
+            <button class="modal-close-btn" @onclick="CloseClientBookingsModal">×</button>
+
+            <h3 style="color: var(--gold); margin-bottom: 10px;">История бронирований</h3>
+            <h4 class="full-name-label">@selectedClientForModal.FullName</h4>
+
+            @if (selectedClientBookings.Any())
+            {
+                <div class="client-bookings-list">
+                    <table class="client-bookings-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Студия</th>
+                                <th>Дата</th>
+                                <th>Время</th>
+                                <th>Стоимость</th>
+                                <th>Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var booking in selectedClientBookings)
+                            {
+                                <tr>
+                                    <td>@booking.BookingId</td
+                                    <td>@booking.StudioName</td
+                                    <td>@booking.BookingDate.ToString("dd.MM.yyyy")</td
+                                    <td>@booking.SlotTime</td
+                                    <td>@booking.TotalPrice.ToString("N0") ₽</td
+                                    <td><span class="status-badge status-@booking.Status">@GetStatusText(booking.Status)</span></td
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="client-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Всего бронирований:</span>
+                        <span class="stat-value">@selectedClientBookings.Count</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Общая сумма:</span>
+                        <span class="stat-value">@selectedClientBookings.Sum(b => b.TotalPrice).ToString("N0") ₽</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <p>У клиента нет бронирований</p>
+                </div>
+            }
+
+            <div class="modal-actions">
+                <button class="btn-primary" @onclick="CloseClientBookingsModal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+}
+</div>
+
+@code {
+    private bool isLoading = true;
+    private string managerName = "";
+    private string activeTab = "bookings";
+    private List<ManagerBookingViewModel> allBookings = new();
+    private string bookingSearchTerm = "";
+    private string bookingStatusFilter = "all";
+    private List<ClientViewModel> allClients = new();
+    private string clientSearchTerm = "";
+    private ClientViewModel? selectedClient = null;
+    private List<StudioViewModel> studios = new();
+    private StudioViewModel? selectedStudio = null;
+    private DateTime? bookingDate;
+    private List<TimeSlotViewModel> availableTimeSlots = new();
+    private List<TimeSlotViewModel> selectedSlots = new();
+    private bool needEquipment = false;
+    private Dictionary<int, int> selectedEquipment = new();
+    private List<EquipmentViewModel> allEquipment = new();
+    private Dictionary<string, List<EquipmentViewModel>> equipmentByCategory = new();
+    private string bookingComment = "";
+    private bool isLoadingSlots = false;
+    private bool isLoadingEquipment = false;
+    private bool isProcessing = false;
+    private void ShowBookingsTab() => SetActiveTab("bookings");
+    private void ShowCreateTab() => SetActiveTab("create");
+    private void ShowClientsTab() => SetActiveTab("clients");
+    private string clientListSearchTerm = "";
+    private ManagerBookingViewModel? selectedBookingDetails = null;
+    private bool isClientBookingsModalOpen = false;
+    private ClientViewModel? selectedClientForModal = null;
+    private List<ManagerBookingViewModel> selectedClientBookings = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadManagerData();
+            await LoadAllData();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadManagerData()
+    {
+        try
+        {
+            managerName = await JS.InvokeAsync<string>("localStorage.getItem", "userName") ?? "Менеджер";
+            var userRole = await JS.InvokeAsync<string>("localStorage.getItem", "userRole");
+
+            if (userRole == "Admin")
+            {
+                Navigation.NavigateTo("/admin", true);
+                return;
+            }
+            if (userRole != "Manager")
+            {
+                Navigation.NavigateTo("/", true);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading manager data: {ex.Message}");
+            Navigation.NavigateTo("/login", true);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadAllData()
+    {
+        await LoadBookings();
+        await LoadClients();
+        await LoadStudios();
+        await LoadEquipment();
+    }
+
+    private async Task LoadBookings()
+    {
+        try
+        {
+            allBookings = await UserService.GetAllBookingsForManagerAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading bookings: {ex.Message}");
+        }
+    }
+
+    private async Task LoadClients()
+    {
+        try
+        {
+            allClients = await UserService.GetAllClientsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading clients: {ex.Message}");
+        }
+    }
+
+    private async Task LoadStudios()
+    {
+        try
+        {
+            studios = await UserService.GetAllStudiosAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading studios: {ex.Message}");
+        }
+    }
+
+    private async Task LoadEquipment()
+    {
+        try
+        {
+            allEquipment = await UserService.GetAllEquipmentAsync();
+            equipmentByCategory = allEquipment
+                .GroupBy(e => e.Category)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading equipment: {ex.Message}");
+        }
+    }
+
+    private async Task LoadAvailableEquipment()
+    {
+        if (!bookingDate.HasValue || !selectedSlots.Any()) return;
+
+        isLoadingEquipment = true;
+        StateHasChanged();
+
+        try
+        {
+            var slotIds = selectedSlots.Select(s => s.SlotId).ToList();
+            var availableEquipment = await UserService.GetAvailableEquipmentForTimeAsync(
+                selectedStudio!.StudioId, bookingDate.Value, slotIds);
+
+            foreach (var equipment in allEquipment)
+            {
+                var available = availableEquipment.FirstOrDefault(e => e.EquipmentId == equipment.EquipmentId);
+                equipment.AvailableQuantity = available?.AvailableQuantity ?? 0;
+            }
+
+            equipmentByCategory = allEquipment
+                .Where(e => e.AvailableQuantity > 0 || selectedEquipment.ContainsKey(e.EquipmentId))
+                .GroupBy(e => e.Category)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading available equipment: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingEquipment = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnDateChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && DateTime.TryParse(e.Value.ToString(), out DateTime date))
+        {
+            bookingDate = date;
+            selectedSlots.Clear();
+            selectedEquipment.Clear();
+            await LoadTimeSlots();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadTimeSlots()
+    {
+        if (!bookingDate.HasValue || selectedStudio == null) return;
+
+        isLoadingSlots = true;
+        selectedSlots.Clear();
+        StateHasChanged();
+
+        try
+        {
+            availableTimeSlots = await UserService.GetAvailableTimeSlotsAsync(selectedStudio.StudioId, bookingDate.Value);
+            Console.WriteLine($"Loaded {availableTimeSlots.Count} slots for studio {selectedStudio.StudioId} on date {bookingDate.Value:yyyy-MM-dd}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading time slots: {ex.Message}");
+            availableTimeSlots = new List<TimeSlotViewModel>();
+        }
+        finally
+        {
+            isLoadingSlots = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SelectClient(ClientViewModel client)
+    {
+        selectedClient = client;
+        selectedStudio = null;
+        bookingDate = null;
+        selectedSlots.Clear();
+        selectedEquipment.Clear();
+    }
+
+    private void SelectClientForBooking(ClientViewModel client)
+    {
+        selectedClient = client;
+        activeTab = "create";
+        StateHasChanged();
+    }
+    private async Task SelectStudio(StudioViewModel studio)
+    {
+        selectedStudio = studio;
+        bookingDate = null;
+        selectedSlots.Clear();
+        selectedEquipment.Clear();
+        availableTimeSlots.Clear();
+        Console.WriteLine($"Selected studio: {studio.Name} (ID: {studio.StudioId})");
+        StateHasChanged();
+    }
+
+    private async Task ToggleTimeSlot(TimeSlotViewModel slot)
+    {
+        if (!slot.IsAvailable) return;
+
+        if (selectedSlots.Contains(slot))
+        {
+            selectedSlots.Remove(slot);
+        }
+        else
+        {
+            if (CanAddSlot(slot))
+            {
+                selectedSlots.Add(slot);
+                selectedSlots = selectedSlots.OrderBy(s => s.StartTime).ToList();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Можно выбирать только последовательные временные слоты");
+                return;
+            }
+        }
+
+        await LoadAvailableEquipment();
+        StateHasChanged();
+    }
+
+    private bool CanAddSlot(TimeSlotViewModel newSlot)
+    {
+        if (!selectedSlots.Any()) return true;
+
+        var orderedSlots = selectedSlots.OrderBy(s => s.StartTime).ToList();
+        var firstSlot = orderedSlots.First();
+        var lastSlot = orderedSlots.Last();
+
+        return newSlot.EndTime == firstSlot.StartTime || newSlot.StartTime == lastSlot.EndTime;
+    }
+
+    private string GetTimeRange()
+    {
+        if (!selectedSlots.Any()) return "";
+        var orderedSlots = selectedSlots.OrderBy(s => s.StartTime).ToList();
+        return $"{orderedSlots.First().StartTime:hh\\:mm} - {orderedSlots.Last().EndTime:hh\\:mm}";
+    }
+
+    private int GetTotalDuration() => selectedSlots.Sum(s => s.DurationMinutes);
+
+    private decimal GetStudioPrice() => selectedSlots.Sum(s => s.Price);
+
+    private int GetEquipmentQuantity(int equipmentId) => selectedEquipment.ContainsKey(equipmentId) ? selectedEquipment[equipmentId] : 0;
+
+    private void ChangeEquipmentQuantity(EquipmentViewModel equipment, int delta)
+    {
+        var currentQty = GetEquipmentQuantity(equipment.EquipmentId);
+        var newQty = currentQty + delta;
+        var maxAvailable = equipment.AvailableQuantity;
+
+        if (newQty <= 0)
+        {
+            selectedEquipment.Remove(equipment.EquipmentId);
+        }
+        else if (newQty <= maxAvailable)
+        {
+            selectedEquipment[equipment.EquipmentId] = newQty;
+        }
+        StateHasChanged();
+    }
+
+    private decimal GetEquipmentPrice()
+    {
+        if (!needEquipment || !selectedEquipment.Any()) return 0;
+        var hours = GetTotalDuration() / 60;
+        if (hours == 0) return 0;
+
+        decimal total = 0;
+        foreach (var eq in selectedEquipment)
+        {
+            var equipment = allEquipment.FirstOrDefault(e => e.EquipmentId == eq.Key);
+            if (equipment != null)
+            {
+                total += equipment.RentalPrice * eq.Value * hours;
+            }
+        }
+        return total;
+    }
+
+    private decimal GetTotalPrice() => GetStudioPrice() + GetEquipmentPrice();
+
+    private async Task CreateBookingForClient()
+    {
+        if (selectedClient == null)
+        {
+            await JS.InvokeVoidAsync("alert", "Выберите клиента");
+            return;
+        }
+        if (selectedStudio == null)
+        {
+            await JS.InvokeVoidAsync("alert", "Выберите студию");
+            return;
+        }
+        if (!bookingDate.HasValue || !selectedSlots.Any())
+        {
+            await JS.InvokeVoidAsync("alert", "Выберите дату и время");
+            return;
+        }
+
+        isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            var equipmentList = selectedEquipment.Select(eq => (eq.Key, eq.Value)).ToList();
+            bool allSuccess = true;
+
+            foreach (var slot in selectedSlots)
+            {
+                var success = await UserService.CreateBookingAsync(
+                    selectedClient.UserId,
+                    selectedStudio.StudioId,
+                    slot.SlotId,
+                    bookingDate.Value,
+                    bookingComment,
+                    equipmentList
+                );
+
+                if (!success)
+                {
+                    allSuccess = false;
+                    break;
+                }
+            }
+
+            if (allSuccess)
+            {
+                await JS.InvokeVoidAsync("alert", $"Бронирование для {selectedClient.FullName} успешно создано!");
+                await LoadBookings();
+                selectedClient = null;
+                selectedStudio = null;
+                bookingDate = null;
+                selectedSlots.Clear();
+                selectedEquipment.Clear();
+                bookingComment = "";
+                activeTab = "bookings";
+                StateHasChanged();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Ошибка при создании бронирования");
+                await LoadTimeSlots();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating booking: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Произошла ошибка");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task ConfirmBooking(int bookingId)
+    {
+        var success = await UserService.ConfirmBookingAsync(bookingId);
+        if (success)
+        {
+            await LoadBookings();
+            await JS.InvokeVoidAsync("alert", "Бронирование подтверждено");
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", "Не удалось подтвердить бронирование");
+        }
+    }
+
+    private async Task CancelBookingByManager(int bookingId)
+    {
+        var booking = allBookings.FirstOrDefault(b => b.BookingId == bookingId);
+        if (booking == null) return;
+
+        string message = booking.Status == "paid"
+            ? "ВНИМАНИЕ! Бронирование оплачено. При отмене средства будут возвращены клиенту. Продолжить?"
+            : "Отменить бронирование?";
+
+        if (!await JS.InvokeAsync<bool>("confirm", message)) return;
+
+        bool success;
+        if (booking.Status == "paid")
+        {
+            success = await UserService.CancelPaidBookingAsync(bookingId);
+        }
+        else
+        {
+            success = await UserService.CancelBookingAsync(bookingId);
+        }
+
+        if (success)
+        {
+            await LoadBookings();
+            await JS.InvokeVoidAsync("alert", booking.Status == "paid" ? "Бронирование отменено, средства возвращены клиенту" : "Бронирование отменено");
+            StateHasChanged();
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", "Не удалось отменить бронирование");
+        }
+    }
+
+    private async Task ViewBookingDetails(ManagerBookingViewModel booking)
+    {
+        selectedBookingDetails = await UserService.GetBookingDetailsForManagerAsync(booking.BookingId);
+        StateHasChanged();
+    }
+
+    private async Task ViewClientBookings(ClientViewModel client)
+    {
+        var allBookingsList = await UserService.GetAllBookingsForManagerAsync();
+
+        selectedClientBookings = allBookingsList
+            .Where(b => b.ClientName == client.FullName)
+            .OrderByDescending(b => b.BookingDate)
+            .ToList();
+
+        selectedClientForModal = client;
+        isClientBookingsModalOpen = true;
+        StateHasChanged();
+    }
+
+    private void CloseClientBookingsModal()
+    {
+        isClientBookingsModalOpen = false;
+        selectedClientForModal = null;
+        selectedClientBookings.Clear();
+        StateHasChanged();
+    }
+
+    private void CloseBookingDetails()
+    {
+        selectedBookingDetails = null;
+    }
+
+    private void SetActiveTab(string tab)
+    {
+        activeTab = tab;
+        if (tab == "clients")
+        {
+            _ = LoadClients();
+        }
+    }
+    private string GetStatusText(string status) => status switch
+    {
+        "paid" => "Ожидает",
+        "confirmed" => "Подтверждено",
+        "completed" => "Завершено",
+        "cancelled" => "Отменено",
+        _ => status
+    };
+
+    private List<ManagerBookingViewModel> filteredBookings => allBookings
+        .Where(b => (bookingStatusFilter == "all" || b.Status == bookingStatusFilter) &&
+                    (string.IsNullOrEmpty(bookingSearchTerm) ||
+                     b.ClientName.Contains(bookingSearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                     b.StudioName.Contains(bookingSearchTerm, StringComparison.OrdinalIgnoreCase)))
+        .OrderByDescending(b => b.BookingDate)
+        .ToList();
+
+    private List<ClientViewModel> filteredClients => allClients
+        .Where(c => c.RoleName == "Client" &&
+                    (string.IsNullOrEmpty(clientSearchTerm) ||
+                     c.FullName.Contains(clientSearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                     c.Email.Contains(clientSearchTerm, StringComparison.OrdinalIgnoreCase)))
+        .ToList();
+
+    private List<ClientViewModel> filteredClientList => allClients
+        .Where(c => c.RoleName == "Client" &&
+                    (string.IsNullOrEmpty(clientListSearchTerm) ||
+                     c.FullName.Contains(clientListSearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                     c.Email.Contains(clientListSearchTerm, StringComparison.OrdinalIgnoreCase)))
+        .OrderBy(c => c.FullName)
+        .ToList();
+
+    private async Task Logout()
+    {
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userId");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userEmail");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userName");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userRole");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "isAuthenticated");
+
+        AppStateService.IsAuthenticated = false;
+        AppStateService.UserName = "";
+        Navigation.NavigateTo("/", true);
+    }
+
+    private async Task CompleteBooking(int bookingId)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Подтвердить завершение бронирования?")) return;
+
+        var success = await UserService.CompleteBookingAsync(bookingId);
+        if (success)
+        {
+            await LoadBookings();
+            await JS.InvokeVoidAsync("alert", "Бронирование отмечено как завершенное");
+            StateHasChanged();
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", "Не удалось завершить бронирование");
+        }
+    }
+}

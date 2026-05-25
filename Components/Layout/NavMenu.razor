@@ -1,0 +1,132 @@
+﻿@rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using StudioFlow.Services
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+@inject AppStateService AppStateService
+@implements IDisposable
+@inject AuthService AuthService
+
+<nav class="navbar">
+    <div class="nav-container">
+        <div class="nav-logo">
+            <a href="/">
+                <i class="fas fa-camera"></i>
+                <span>StudioFlow</span>
+            </a>
+        </div>
+
+        <div class="nav-links">
+            <a href="/" class="nav-link">О нас</a>
+            <a href="/studios" class="nav-link">Залы</a>
+            <a href="/equipment" class="nav-link">Оборудование</a>
+
+            @if (AppStateService.IsAuthenticated)
+            {
+                <div class="user-info" @onclick="GoToProfile" style="cursor: pointer;">
+                    <i class="fas fa-user-circle"></i>
+                    <span class="user-name">@AppStateService.UserName</span>
+                </div>
+                <button class="nav-link logout-btn" @onclick="Logout">Выйти</button>
+            }
+            else
+            {
+                <a href="/login" class="nav-link login-btn">Вход</a>
+                <a href="/register" class="nav-link register-btn">Регистрация</a>
+            }
+        </div>
+
+        <button class="mobile-menu-btn" @onclick="ToggleMobileMenu">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="mobile-menu @(isMobileMenuOpen ? "open" : "")">
+        <a href="/" class="mobile-link">О нас</a>
+        <a href="/studios" class="mobile-link">Залы</a>
+        <a href="/equipment" class="mobile-link">Оборудование</a>
+        @if (AppStateService.IsAuthenticated)
+        {
+            <div class="mobile-user-info" @onclick="GoToProfile" style="cursor: pointer;">
+                <i class="fas fa-user-circle"></i>
+                <span>@AppStateService.UserName</span>
+            </div>
+            <button class="mobile-link logout" @onclick="Logout">Выйти</button>
+        }
+        else
+        {
+            <a href="/login" class="mobile-link login">Вход</a>
+            <a href="/register" class="mobile-link register">Регистрация</a>
+        }
+    </div>
+</nav>
+
+@code {
+    private bool isMobileMenuOpen = false;
+    private bool isFirstRender = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            AppStateService.OnAuthStateChanged += OnAuthStateChanged;
+
+            await AuthService.RestoreAuthStateAsync();
+            StateHasChanged();
+        }
+    }
+
+    private void OnAuthStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void ToggleMobileMenu()
+    {
+        isMobileMenuOpen = !isMobileMenuOpen;
+    }
+
+    private void GoToProfile()
+    {
+        var userRole = AppStateService.UserRole;
+
+        if (userRole == "Admin")
+        {
+            Navigation.NavigateTo("/admin");
+        }
+        else if (userRole == "Manager")
+        {
+            Navigation.NavigateTo("/manager");
+        }
+        else if (userRole == "Client")
+        {
+            Navigation.NavigateTo("/profile");
+        }
+        else
+        {
+            Navigation.NavigateTo("/login");
+        }
+    }
+
+    private async Task Logout()
+    {
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userId");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userEmail");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userName");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userRole");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "isAuthenticated");
+
+        AppStateService.IsAuthenticated = false;
+        AppStateService.UserName = "";
+        AppStateService.UserRole = "";
+
+        Navigation.NavigateTo("/", true);
+    }
+
+    public void Dispose()
+    {
+        AppStateService.OnAuthStateChanged -= OnAuthStateChanged;
+    }
+}

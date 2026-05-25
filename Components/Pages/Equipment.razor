@@ -1,0 +1,103 @@
+﻿@page "/equipment"
+@rendermode InteractiveServer
+@using StudioFlow.Models
+@using StudioFlow.Services
+@inject IUserService UserService
+@inject NavigationManager Navigation
+
+
+<link rel="stylesheet" href="/css/equipment.css" />
+<PageTitle>StudioFlow - Оборудование</PageTitle>
+
+<div class="equipment-container">
+    <div class="equipment-header">
+        <h1>Оборудование для аренды</h1>
+        <p>Профессиональное оборудование для ваших съемок</p>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>Загрузка оборудования...</p>
+        </div>
+    }
+    else
+    {
+        @foreach (var category in equipmentByCategory)
+        {
+            <div class="equipment-category">
+                <h2>@category.Key</h2>
+                <div class="equipment-grid">
+                    @foreach (var item in category.Value)
+                    {
+                        <div class="equipment-card">
+                            <div class="equipment-image">
+                                @if (!string.IsNullOrEmpty(item.ImageUrl))
+                                {
+                                    <img src="@item.ImageUrl" alt="@item.Name" />
+                                }
+                                else
+                                {
+                                    <div class="equipment-image-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                    </div>
+                                }
+                            </div>
+                            <div class="equipment-content">
+                                <h3>@item.Name</h3>
+                                <p class="equipment-description">@item.Description</p>
+                                <div class="equipment-footer">
+                                    <div class="equipment-price">
+                                        <span class="price">@item.RentalPrice ₽</span>
+                                        <span class="price-period">/час</span>
+                                    </div>
+                                    <div class="equipment-availability">
+                                        <i class="fas fa-box"></i>
+                                        <span>Доступно: @item.Quantity шт.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+
+@code {
+    private List<EquipmentViewModel> allEquipment = new();
+    private Dictionary<string, List<EquipmentViewModel>> equipmentByCategory = new();
+    private bool isLoading = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadEquipment();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadEquipment()
+    {
+        isLoading = true;
+        try
+        {
+            allEquipment = await UserService.GetAllEquipmentAsync();
+            equipmentByCategory = allEquipment
+                .GroupBy(e => e.Category)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading equipment: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

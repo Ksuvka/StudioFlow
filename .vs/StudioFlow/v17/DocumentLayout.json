@@ -1,0 +1,111 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\kseni\\OneDrive\\\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0414\u0418\u041F\u041B\u041E\u041C\\New\\StudioFlow\\StudioFlow\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{F05606A1-6BEA-4C85-A1F9-D99C30AE68FB}|StudioFlow\\StudioFlow.csproj|c:\\users\\kseni\\onedrive\\\u0440\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0434\u0438\u043F\u043B\u043E\u043C\\new\\studioflow\\studioflow\\studioflow\\wwwroot\\css\\profileclient.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{F05606A1-6BEA-4C85-A1F9-D99C30AE68FB}|StudioFlow\\StudioFlow.csproj|solutionrelative:studioflow\\wwwroot\\css\\profileclient.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{F05606A1-6BEA-4C85-A1F9-D99C30AE68FB}|StudioFlow\\StudioFlow.csproj|c:\\users\\kseni\\onedrive\\\u0440\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0434\u0438\u043F\u043B\u043E\u043C\\new\\studioflow\\studioflow\\studioflow\\models\\user.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{F05606A1-6BEA-4C85-A1F9-D99C30AE68FB}|StudioFlow\\StudioFlow.csproj|solutionrelative:studioflow\\models\\user.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{F05606A1-6BEA-4C85-A1F9-D99C30AE68FB}|StudioFlow\\StudioFlow.csproj|c:\\users\\kseni\\onedrive\\\u0440\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0434\u0438\u043F\u043B\u043E\u043C\\new\\studioflow\\studioflow\\studioflow\\components\\pages\\profile.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{F05606A1-6BEA-4C85-A1F9-D99C30AE68FB}|StudioFlow\\StudioFlow.csproj|solutionrelative:studioflow\\components\\pages\\profile.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{F05606A1-6BEA-4C85-A1F9-D99C30AE68FB}|StudioFlow\\StudioFlow.csproj|c:\\users\\kseni\\onedrive\\\u0440\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0434\u0438\u043F\u043B\u043E\u043C\\new\\studioflow\\studioflow\\studioflow\\services\\userservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{F05606A1-6BEA-4C85-A1F9-D99C30AE68FB}|StudioFlow\\StudioFlow.csproj|solutionrelative:studioflow\\services\\userservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{F05606A1-6BEA-4C85-A1F9-D99C30AE68FB}|StudioFlow\\StudioFlow.csproj|c:\\users\\kseni\\onedrive\\\u0440\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0434\u0438\u043F\u043B\u043E\u043C\\new\\studioflow\\studioflow\\studioflow\\services\\iuserservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{F05606A1-6BEA-4C85-A1F9-D99C30AE68FB}|StudioFlow\\StudioFlow.csproj|solutionrelative:studioflow\\services\\iuserservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 1,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedHeight": 2,
+          "SelectedChildIndex": 4,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "User.cs",
+              "DocumentMoniker": "C:\\Users\\kseni\\OneDrive\\\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0414\u0418\u041F\u041B\u041E\u041C\\New\\StudioFlow\\StudioFlow\\StudioFlow\\Models\\User.cs",
+              "RelativeDocumentMoniker": "StudioFlow\\Models\\User.cs",
+              "ToolTip": "C:\\Users\\kseni\\OneDrive\\\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0414\u0418\u041F\u041B\u041E\u041C\\New\\StudioFlow\\StudioFlow\\StudioFlow\\Models\\User.cs",
+              "RelativeToolTip": "StudioFlow\\Models\\User.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABQAAAACAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-26T20:27:54.592Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "Profile.razor",
+              "DocumentMoniker": "C:\\Users\\kseni\\OneDrive\\\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0414\u0418\u041F\u041B\u041E\u041C\\New\\StudioFlow\\StudioFlow\\StudioFlow\\Components\\Pages\\Profile.razor",
+              "RelativeDocumentMoniker": "StudioFlow\\Components\\Pages\\Profile.razor",
+              "ToolTip": "C:\\Users\\kseni\\OneDrive\\\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0414\u0418\u041F\u041B\u041E\u041C\\New\\StudioFlow\\StudioFlow\\StudioFlow\\Components\\Pages\\Profile.razor",
+              "RelativeToolTip": "StudioFlow\\Components\\Pages\\Profile.razor",
+              "ViewState": "AgIAACACAAAAAAAAAAAcwD0CAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-04-26T19:37:01.802Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "IUserService.cs",
+              "DocumentMoniker": "C:\\Users\\kseni\\OneDrive\\\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0414\u0418\u041F\u041B\u041E\u041C\\New\\StudioFlow\\StudioFlow\\StudioFlow\\Services\\IUserService.cs",
+              "RelativeDocumentMoniker": "StudioFlow\\Services\\IUserService.cs",
+              "ToolTip": "C:\\Users\\kseni\\OneDrive\\\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0414\u0418\u041F\u041B\u041E\u041C\\New\\StudioFlow\\StudioFlow\\StudioFlow\\Services\\IUserService.cs",
+              "RelativeToolTip": "StudioFlow\\Services\\IUserService.cs",
+              "ViewState": "AgIAABoAAAAAAAAAAAAqwCIAAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-26T19:34:16.723Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "UserService.cs",
+              "DocumentMoniker": "C:\\Users\\kseni\\OneDrive\\\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0414\u0418\u041F\u041B\u041E\u041C\\New\\StudioFlow\\StudioFlow\\StudioFlow\\Services\\UserService.cs",
+              "RelativeDocumentMoniker": "StudioFlow\\Services\\UserService.cs",
+              "ToolTip": "C:\\Users\\kseni\\OneDrive\\\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0414\u0418\u041F\u041B\u041E\u041C\\New\\StudioFlow\\StudioFlow\\StudioFlow\\Services\\UserService.cs",
+              "RelativeToolTip": "StudioFlow\\Services\\UserService.cs",
+              "ViewState": "AgIAAOoBAAAAAAAAAAAkwLUCAAANAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-26T19:33:33.017Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "profileClient.css",
+              "DocumentMoniker": "C:\\Users\\kseni\\OneDrive\\\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0414\u0418\u041F\u041B\u041E\u041C\\New\\StudioFlow\\StudioFlow\\StudioFlow\\wwwroot\\css\\profileClient.css",
+              "RelativeDocumentMoniker": "StudioFlow\\wwwroot\\css\\profileClient.css",
+              "ToolTip": "C:\\Users\\kseni\\OneDrive\\\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u0441\u0442\u043E\u043B\\\u0414\u0418\u041F\u041B\u041E\u041C\\New\\StudioFlow\\StudioFlow\\StudioFlow\\wwwroot\\css\\profileClient.css",
+              "RelativeToolTip": "StudioFlow\\wwwroot\\css\\profileClient.css",
+              "ViewState": "AgIAAEgDAAAAAAAAAAAAAHIDAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2026-04-26T19:13:05.115Z",
+              "EditorCaption": ""
+            }
+          ]
+        },
+        {
+          "DockedHeight": 2,
+          "SelectedChildIndex": -1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{d78612c7-9962-4b83-95d9-268046dad23a}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

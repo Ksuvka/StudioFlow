@@ -1,0 +1,205 @@
+﻿.register-container {
+    min-height: 80vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+}
+
+.register-card {
+    max-width: 500px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    padding: 40px;
+    border: 1px solid rgba(255, 215, 0, 0.2);
+}
+
+.register-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+    .register-header h1 {
+        font-size: 32px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: #ffffff;
+    }
+
+    .register-header p {
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        color: rgba(255, 255, 255, 0.8);
+        font-weight: 500;
+    }
+
+.form-control {
+    width: 100%;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: #ffffff;
+    font-size: 16px;
+    transition: all 0.3s ease;
+}
+
+    .form-control:focus {
+        outline: none;
+        border-color: #ffd700;
+        background: rgba(255, 255, 255, 0.12);
+    }
+
+.form-hint {
+    display: block;
+    margin-top: 5px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.btn-register {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #ffd700, #e6b800);
+    border: none;
+    border-radius: 12px;
+    color: #0a0a0a;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 20px;
+}
+
+    .btn-register:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(255, 215, 0, 0.3);
+    }
+
+    .btn-register:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+.alert-error {
+    background: rgba(255, 70, 70, 0.2);
+    border: 1px solid rgba(255, 70, 70, 0.3);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    color: #ff8888;
+}
+
+.alert-success {
+    background: rgba(50, 205, 50, 0.2);
+    border: 1px solid rgba(50, 205, 50, 0.3);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    color: #88ff88;
+}
+
+.register-footer {
+    text-align: center;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+    .register-footer a {
+        color: #ffd700;
+        text-decoration: none;
+    }
+
+        .register-footer a:hover {
+            text-decoration: underline;
+        }
+
+.field-error {
+    color: #ff5555;
+    font-size: 12px;
+    margin-top: 5px;
+}
+
+.form-control.error {
+    border-color: #ff5555 !important;
+    background-color: rgba(255, 85, 85, 0.05) !important;
+}
+
+.password-requirements {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.req-item {
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 12px;
+}
+
+    .req-item.valid {
+        color: #4caf50;
+        background: rgba(76, 175, 80, 0.1);
+    }
+
+    .req-item.invalid {
+        color: #ff5555;
+        background: rgba(255, 85, 85, 0.1);
+    }
+
+.alert-error {
+    background: rgba(255, 85, 85, 0.15);
+    border: 1px solid #ff5555;
+    color: #ff8888;
+    padding: 12px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.alert-success {
+    background: rgba(76, 175, 80, 0.15);
+    border: 1px solid #4caf50;
+    color: #8bc34a;
+    padding: 12px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.error-icon, .success-icon {
+    font-size: 18px;
+}
+
+.register-card .password-wrapper .form-control {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.register-card .password-toggle {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+    .register-card .password-toggle:hover {
+        color: #ffd700;
+    }

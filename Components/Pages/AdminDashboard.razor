@@ -1,0 +1,1479 @@
+﻿@page "/admin"
+@rendermode InteractiveServer
+@using StudioFlow.Services
+@using StudioFlow.Models
+@using Microsoft.AspNetCore.Components.Forms
+@inject IUserService UserService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject AppStateService AppStateService
+@inject AuthService AuthService
+
+<PageTitle>StudioFlow - Администратор</PageTitle>
+<link rel="stylesheet" href="css/admin.css" />
+
+
+<div class="admin-container">
+    @if (isLoading)
+    {
+        <div style="text-align: center; padding: 50px;">
+            <div class="loader"></div>
+            <h3 style="color: var(--text-gray); margin-top: 20px;">Загрузка...</h3>
+        </div>
+    }
+    else
+    {
+        <div class="admin-card">
+            <!-- Шапка -->
+            <div class="admin-header">
+                <div class="admin-header-info">
+                    <h1>@adminName</h1>
+                    <p>Панель администратора</p>
+                </div>
+                <button class="btn-logout" @onclick="Logout">Выйти</button>
+            </div>
+
+            <div class="admin-tabs">
+                <button class="tab-btn @(activeTab == "bookings" ? "active" : "")" @onclick="ShowBookingsTab">
+                    Бронирования
+                </button>
+                <button class="tab-btn @(activeTab == "studios" ? "active" : "")" @onclick="ShowStudiosTab">
+                    Залы
+                </button>
+                <button class="tab-btn @(activeTab == "equipment" ? "active" : "")" @onclick="ShowEquipmentTab">
+                    Оборудование
+                </button>
+                <button class="tab-btn @(activeTab == "pricing" ? "active" : "")" @onclick="ShowPricingTab">
+                    Цены
+                </button>
+                <button class="tab-btn @(activeTab == "clients" ? "active" : "")" @onclick="ShowClientsTab">
+                    Клиенты
+                </button>
+            </div>
+
+            <div class="admin-content">
+                <!-- Вкладка: Бронирования -->
+                @if (activeTab == "bookings")
+                {
+                    <div class="bookings-tab">
+                        <!-- Блок выбора даты -->
+                        <div class="date-selector-section">
+                            
+                            <div class="date-controls">
+                                <input type="date" value="@selectedDate?.ToString("yyyy-MM-dd")" @onchange="OnDateChanged" class="date-input" />
+                            <button class="btn-success" @onclick="GenerateReport" disabled="@(selectedDateBookings == null || !selectedDateBookings.Any())">
+                                Сформировать отчет
+                            </button>
+                            </div>
+                        </div>
+
+                        <!-- Статистика за выбранный день -->
+                        @if (selectedDateBookings != null)
+                        {
+                            <div class="day-stats">
+                                <div class="stat-card">
+                                    <div class="stat-info">
+                                        <div class="stat-label">Выбранная дата</div>
+                                        <div class="stat-value">@selectedDate?.ToString("dd.MM.yyyy")</div>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-info">
+                                        <div class="stat-label">Всего броней</div>
+                                        <div class="stat-value">@selectedDateBookings.Count</div>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-info">
+                                        <div class="stat-label">Выручка за день</div>
+                                        <div class="stat-value">@selectedDateTotal.ToString("N0") ₽</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Таблица бронирований за выбранный день -->
+                            <div class="daily-bookings-section">
+                                <h3 class="label-date">Бронирования на @selectedDate?.ToString("dd.MM.yyyy")</h3>
+                                @if (selectedDateBookings.Any())
+                                {
+                                    <div class="bookings-list">
+                                        @foreach (var booking in selectedDateBookings)
+                                        {
+                                            <div class="booking-card">
+                                                <div class="booking-card-header">
+                                                    <div class="booking-time"> @booking.SlotTime</div>
+                                                    <div class="booking-status status-@booking.Status">@GetStatusText(booking.Status)</div>
+                                                </div>
+                                                <div class="booking-card-body">
+                                                    <div class="booking-row">
+                                                        <span class="label">Студия:</span>
+                                                        <span class="value">@booking.StudioName</span>
+                                                    </div>
+                                                    <div class="booking-row">
+                                                        <span class="label">Клиент:</span>
+                                                        <span class="value">@booking.ClientName</span>
+                                                    </div>
+                                                    <div class="booking-row">
+                                                        <span class="label">Оборудование:</span>
+                                                        <span class="value">
+                                                            @if (booking.EquipmentList.Any())
+                                                            {
+                                                                @string.Join(", ", booking.EquipmentList.Select(e => $"{e.Name} x{e.Quantity}"))
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="text-gray">—</span>
+                                                            }
+                                                        </span>
+                                                    </div>
+                                                    <div class="booking-row">
+                                                        <span class="label">Сумма:</span>
+                                                        <span class="value price">@booking.TotalPrice.ToString("N0") ₽</span>
+                                                    </div>
+                                                    @if (!string.IsNullOrEmpty(booking.Comment))
+                                                    {
+                                                        <div class="booking-comment">
+                                                             @booking.Comment
+                                                        </div>
+                                                    }
+                                                </div>
+                                                <div class="booking-card-actions">
+                                                    <button class="btn-small btn-details" @onclick="() => ViewBookingDetails(booking)">Детали</button>
+                                                    @if (booking.Status == "pending")
+                                                    {
+                                                        <button class="btn-small btn-confirm" @onclick="() => ConfirmBooking(booking.BookingId)">Подтвердить</button>
+                                                    }
+                                                    @if (booking.Status != "cancelled")
+                                                    {
+                                                        <button class="btn-small btn-cancel" @onclick="() => CancelBooking(booking.BookingId)">Отменить</button>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="empty-state">
+                                        <p>Нет бронирований на выбранную дату</p>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+<!-- Вкладка: Залы -->
+@if (activeTab == "studios")
+{
+    <div class="studios-tab">
+        <button class="btn-primary" @onclick="OpenStudioModal">+ Добавить зал</button>
+
+        <div class="studios-grid">
+            @foreach (var studio in studios)
+            {
+                <div class="studio-card @(!studio.IsActive ? "inactive" : "")">
+                    <div class="studio-card-header">
+                        <h3>@studio.Name</h3>
+                        <div class="studio-actions">
+                                <button class="btn-icon" @onclick="() => EditStudio(studio)">
+                                     <img src="images/icon/edit.png" alt="Редактировать" />
+                                </button>
+                            <button class="btn-icon delete" @onclick="() => DeleteStudio(studio.StudioId)">
+                                   <img src="images/icon/delete.png" alt="Удалить" />
+                             </button>
+                        </div>
+                    </div>
+                    <p class="studio-description">@studio.Description</p>
+                   <div class="studio-details">
+                        <span><strong>Адрес:</strong> @studio.Address</span>
+                        <span><strong>Площадь:</strong> @studio.Area м²</span>
+                        <span><strong>Потолки:</strong> @studio.CeilingHeight м</span>
+                        <span><strong>Стоимость:</strong> @studio.BasePrice.ToString("N0") ₽/час</span>
+                        <span>
+                            <strong>Свет:</strong>
+                            @(studio.HasNaturalLight ? "Естественный" : "Искусственный")
+                        </span>
+
+                        @if (!studio.IsActive)
+                        {
+                            <span class="inactive-badge">НЕАКТИВЕН</span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+ <!-- Вкладка: Оборудование -->
+@if (activeTab == "equipment")
+{
+    <div class="equipment-tab">
+        <button class="btn-primary" @onclick="OpenEquipmentModal">+ Добавить оборудование</button>
+
+        <div class="equipment-grid">
+            @foreach (var category in equipmentByCategory)
+            {
+                <div class="equipment-category-section">
+                    <h3>@category.Key</h3>
+                    <div class="equipment-cards">
+                        @foreach (var item in category.Value)
+                        {
+                            <div class="equipment-card">
+                                <div class="equipment-card-header">
+                                    <h4>@item.Name</h4>
+                                    <div class="equipment-actions">
+                                        <button class="btn-icon" @onclick="() => EditEquipment(item)">
+                                            <img src="images/icon/edit.png" alt="Редактировать" />
+                                            </button>
+                                        <button class="btn-icon delete" @onclick="() => DeleteEquipmentById(item.EquipmentId)">
+                                            <img src="images/icon/delete.png" alt="Удалить" />
+                                            </button>
+                                    </div>
+                                </div>
+                                <p class="equipment-description">@item.Description</p>
+                                <div class="equipment-details">
+                                    <span>Цена: @item.RentalPrice.ToString("N0") ₽/час</span>
+                                    <span>Доступно: @item.Quantity шт.</span>
+                                    @if (!item.IsActive)
+                                    {
+                                        <span class="inactive-badge">НЕАКТИВНО</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+ <!-- Вкладка: Цены -->
+@if (activeTab == "pricing")
+{
+    <div class="pricing-tab">
+        <button class="btn-primary" @onclick="OpenPricingRuleModal">+ Добавить правило</button>
+        
+        <div class="pricing-table-container">
+            <table class="pricing-table">
+                <thead>
+                    <tr>
+                        <th>Студия</th>
+                        <th>День недели</th>
+                        <th>Время</th>
+                        <th>Множитель</th>
+                        <th>Статус</th>
+                        <th>Описание</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var rule in pricingRules)
+                    {
+                        <tr>
+                            <td>@(rule.StudioName ?? "Все студии")</td
+                            <td>@(rule.DayOfWeekName ?? "Все дни")</td
+                            <td>@(rule.TimeRange ?? "Весь день")</td
+                            <td>@(rule.Multiplier.ToString("F2"))</td
+                            <td>
+                                <span class="status-badge @(rule.IsActive ? "status-active" : "status-inactive")">
+                                    @(rule.IsActive ? "Активен" : "Неактивен")
+                                </span>
+                            </td
+                            <td>@rule.Description</td
+                            <td>
+                                <button class="btn-icon" @onclick="() => EditPricingRule(rule)">
+                                    <img src="images/icon/edit.png" alt="Редактировать" />
+                                </button>
+                                <button class="btn-icon delete" @onclick="() => DeletePricingRule(rule.RuleId)">
+                                     <img src="images/icon/delete.png" alt="Удалить" />
+                                </button>
+                            </td
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+ <!-- Вкладка: Клиенты -->
+                @if (activeTab == "clients")
+                {
+                    <div class="clients-tab">
+                        <div class="search-filter">
+                            <input type="text" placeholder="Поиск по имени, email, телефону..." @bind="clientSearchTerm" class="search-input" />
+                        </div>
+
+                        <div class="clients-grid">
+                            @foreach (var client in filteredClientsList)
+                            {
+                                                            <div class="client-card">
+                                <div class="client-card-header">
+                                    <h3>@client.FullName</h3>
+                                </div>
+
+                                <div class="client-details">
+
+                                    <p>
+                                        <span>Почта</span>
+                                        <span>@client.Email</span>
+                                    </p>
+
+                                    <p>
+                                        <span>Телефон</span>
+                                        <span>@(string.IsNullOrEmpty(client.Phone) ? "—" : client.Phone)</span>
+                                    </p>
+
+                                    <p>
+                                        <span>Регистрация</span>
+                                        <span>@client.CreatedAt.ToString("dd.MM.yyyy")</span>
+                                    </p>
+
+                                    <p class="total-bookings">
+                                        <span>Всего броней</span>
+                                        <span>@client.TotalBookings</span>
+                                    </p>
+
+                                    <p class="total-spent">
+                                        <span>Потрачено</span>
+                                        <span>@client.TotalSpent.ToString("N0") ₽</span>
+                                    </p>
+
+                                </div>
+
+                                <button class="btn-details"
+                                        @onclick="() => ViewClientBookings(client)">
+                                    История бронирований
+                                </button>
+                            </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Модальное окно деталей бронирования -->
+    @if (isBookingDetailsModalOpen && selectedBookingForModal != null)
+    {
+        <div class="modal-overlay active" @onclick="CloseBookingDetailsModal">
+            <div class="modal-content booking-details-modal" @onclick:stopPropagation="true">
+                <button class="modal-close-btn" @onclick="CloseBookingDetailsModal">×</button>
+                
+                <h3 style="color: var(--gold); margin-bottom: 20px;">Детали бронирования #@selectedBookingForModal.BookingId</h3>
+      
+
+                <div class="booking-details-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Клиент:</span>
+                        <span class="detail-value">@selectedBookingForModal.ClientName</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Студия:</span>
+                        <span class="detail-value">@selectedBookingForModal.StudioName</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Дата:</span>
+                        <span class="detail-value">@selectedBookingForModal.BookingDate.ToString("dd.MM.yyyy")</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Время:</span>
+                        <span class="detail-value">@selectedBookingForModal.SlotTime</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Статус:</span>
+                        <span class="detail-value status-@selectedBookingForModal.Status">@GetStatusText(selectedBookingForModal.Status)</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Сумма:</span>
+                        <span class="detail-value price">@selectedBookingForModal.TotalPrice.ToString("N0") ₽</span>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(selectedBookingForModal.Comment))
+                {
+                    <div class="detail-comment">
+                        <span class="detail-label">Комментарий:</span>
+                        <p class="detail-value">@selectedBookingForModal.Comment</p>
+                    </div>
+                }
+
+                <div class="detail-equipment">
+                    <span class="detail-label">Оборудование:</span>
+                    @if (selectedBookingForModal.EquipmentList.Any())
+                    {
+                        <div class="equipment-list-modal">
+                            @foreach (var eq in selectedBookingForModal.EquipmentList)
+                            {
+                                <div class="equipment-item-modal">
+                                    <span>@eq.Name</span>
+                                    <span>x @eq.Quantity</span>
+                                    <span class="eq-price">@((eq.RentalPrice * eq.Quantity).ToString("N0")) ₽</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="detail-value text-gray">Оборудование не выбрано</p>
+                    }
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn-close" @onclick="CloseBookingDetailsModal">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Модальное окно для залов -->
+@if (isStudioModalOpen)
+{
+    <div class="modal-overlay active" @onclick="CloseStudioModal">
+        <div class="modal-content studio-modal" @onclick:stopPropagation="true">
+            <button class="modal-close-btn" @onclick="CloseStudioModal">×</button>
+            
+            <h3 style="color: var(--gold); margin-bottom: 20px;">
+                @(isEditingStudio ? "Редактирование зала" : "Добавление зала")
+            </h3>
+            
+            <div class="studio-form">
+                <div class="form-row">
+                    <label>Название зала *</label>
+                    <input type="text" @bind="studioEditModel.Name" class="form-input" placeholder="Например: Циклорама" />
+                </div>
+                
+                <div class="form-row">
+                    <label>Описание</label>
+                    <textarea @bind="studioEditModel.Description" class="form-textarea" rows="3" placeholder="Описание зала..."></textarea>
+                </div>
+                
+                <div class="form-row">
+                    <label>Адрес</label>
+                    <input type="text" @bind="studioEditModel.Address" class="form-input" placeholder="Адрес студии" />
+                </div>
+                
+                <div class="form-row two-columns">
+                    <div>
+                        <label>Площадь (м²)</label>
+                        <input type="number" step="0.1" @bind="studioEditModel.Area" class="form-input" placeholder="80" />
+                    </div>
+                    <div>
+                        <label>Высота потолков (м)</label>
+                        <input type="number" step="0.1" @bind="studioEditModel.CeilingHeight" class="form-input" placeholder="4.5" />
+                    </div>
+                </div>
+                
+                <div class="form-row two-columns">
+                    <div>
+                        <label>Цвет стен</label>
+                        <input type="text" @bind="studioEditModel.WallColor" class="form-input" placeholder="Белый" />
+                    </div>
+                    <div>
+                        <label>Стоимость (₽/час) *</label>
+                        <input type="number" step="100" @bind="studioEditModel.BasePrice" class="form-input" placeholder="1500" />
+                    </div>
+                </div>
+                
+                <div class="form-row checkbox-row">
+                    <label class="checkbox-label">
+                        <input type="checkbox" @bind="studioEditModel.HasNaturalLight" />
+                        <span>Естественное освещение</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" @bind="studioEditModel.IsActive" />
+                        <span>Зал активен</span>
+                    </label>
+                </div>
+                
+                <div class="form-row">
+                    <label>URL изображения (опционально)</label>
+                    <input type="text" @bind="studioEditModel.ImageUrl" class="form-input" placeholder="/images/studios/studio.jpg" />
+                </div>
+            </div>
+            
+            <div class="modal-actions">
+                <button class="btn-save" @onclick="SaveStudio">Сохранить</button>
+                <button class="btn-secondary" @onclick="CloseStudioModal">Отмена</button>
+            </div>
+        </div>
+    </div>
+}
+<!-- Модальное окно для оборудования -->
+@if (isEquipmentModalOpen)
+{
+    <div class="modal-overlay active" @onclick="CloseEquipmentModal">
+        <div class="modal-content equipment-modal" @onclick:stopPropagation="true">
+            <button class="modal-close-btn" @onclick="CloseEquipmentModal">×</button>
+            
+            <h3 style="color: var(--gold); margin-bottom: 20px;">
+                @(isEditingEquipment ? "Редактирование оборудования" : "Добавление оборудования")
+            </h3>
+            
+            <div class="equipment-form">
+                <div class="form-row">
+                    <label>Название оборудования *</label>
+                    <input type="text" @bind="equipmentEditModel.Name" class="form-input" placeholder="Например: Godox AD600BM" />
+                </div>
+                
+                <div class="form-row">
+                    <label>Категория *</label>
+                    <input type="text" @bind="equipmentEditModel.Category" class="form-input" placeholder="Свет, Камера, Штатив, Фон, Аудио, Стойка, Аксессуар" />
+                </div>
+                
+                <div class="form-row">
+                    <label>Описание</label>
+                    <textarea @bind="equipmentEditModel.Description" class="form-textarea" rows="3" placeholder="Описание оборудования..."></textarea>
+                </div>
+                
+                <div class="form-row two-columns">
+                    <div>
+                        <label>Стоимость аренды (₽/час) *</label>
+                        <input type="number" step="50" @bind="equipmentEditModel.RentalPrice" class="form-input" placeholder="500" />
+                    </div>
+                    <div>
+                        <label>Количество *</label>
+                        <input type="number" step="1" @bind="equipmentEditModel.Quantity" class="form-input" placeholder="1" />
+                    </div>
+                </div>
+                
+                <div class="form-row checkbox-row">
+                    <label class="checkbox-label">
+                        <input type="checkbox" @bind="equipmentEditModel.IsActive" />
+                        <span>Оборудование активно</span>
+                    </label>
+                </div>
+                
+                <div class="form-row">
+                    <label>URL изображения (опционально)</label>
+                    <input type="text" @bind="equipmentEditModel.ImageUrl" class="form-input" placeholder="/images/equipment/equipment.jpg" />
+                </div>
+            </div>
+            
+            <div class="modal-actions">
+                <button class="btn-save" @onclick="SaveEquipment">Сохранить</button>
+                <button class="btn-secondary" @onclick="CloseEquipmentModal">Отмена</button>
+            </div>
+        </div>
+    </div>
+}
+<!-- Модальное окно для правил ценообразования -->
+@if (isPricingRuleModalOpen)
+{
+    <div class="modal-overlay active" @onclick="ClosePricingRuleModal">
+        <div class="modal-content pricing-modal" @onclick:stopPropagation="true">
+            <button class="modal-close-btn" @onclick="ClosePricingRuleModal">×</button>
+            
+            <h3 style="color: var(--gold); margin-bottom: 20px;">
+                @(isEditingPricingRule ? "Редактирование правила" : "Добавление правила")
+            </h3>
+            
+            <div class="pricing-form">
+                <div class="form-row">
+                    <label>Студия (необязательно)</label>
+                    <select @bind="pricingRuleEditModel.StudioId" class="form-input">
+                        <option value="">Все студии</option>
+                        @foreach (var studio in studios)
+                        {
+                            <option value="@studio.StudioId">@studio.Name</option>
+                        }
+                    </select>
+                    <small class="form-hint">Если не выбрано, правило применяется ко всем студиям</small>
+                </div>
+                
+                <div class="form-row">
+                    <label>День недели (необязательно)</label>
+                    <select @bind="pricingRuleEditModel.DayOfWeek" class="form-input">
+                        <option value="">Все дни</option>
+                        <option value="0">Воскресенье</option>
+                        <option value="1">Понедельник</option>
+                        <option value="2">Вторник</option>
+                        <option value="3">Среда</option>
+                        <option value="4">Четверг</option>
+                        <option value="5">Пятница</option>
+                        <option value="6">Суббота</option>
+                    </select>
+                    <small class="form-hint">Если не выбрано, правило применяется ко всем дням</small>
+                </div>
+                
+                <div class="form-row two-columns">
+                    <div>
+                        <label>Время начала</label>
+                        <input type="text" @bind="pricingRuleEditModel.StartTime" placeholder="09:00" class="form-input" />
+                        <small class="form-hint">Например: 09:00</small>
+                    </div>
+                    <div>
+                        <label>Время окончания</label>
+                        <input type="text" @bind="pricingRuleEditModel.EndTime" placeholder="21:00" class="form-input" />
+                        <small class="form-hint">Например: 21:00</small>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <label>Множитель</label>
+                    <input type="number" step="0.1" @bind="pricingRuleEditModel.Multiplier" class="form-input" placeholder="1.0" />
+                    <small class="form-hint">Например: 1.5 (увеличивает цену на 50%)</small>
+                </div>
+                
+                <div class="form-row">
+                    <label>Описание</label>
+                    <textarea @bind="pricingRuleEditModel.Description" class="form-textarea" rows="2" placeholder="Описание правила..."></textarea>
+                </div>
+                
+                <div class="form-row checkbox-row">
+                    <label class="checkbox-label">
+                        <input type="checkbox" @bind="pricingRuleEditModel.IsActive" />
+                        <span>Правило активно</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="modal-actions">
+                <button class="btn-save" @onclick="SavePricingRule">Сохранить</button>
+                <button class="btn-secondary" @onclick="ClosePricingRuleModal">Отмена</button>
+            </div>
+        </div>
+    </div>
+}
+<!-- Модальное окно для истории бронирований клиента -->
+@if (isClientBookingsModalOpen && selectedClientForModal != null)
+{
+    <div class="modal-overlay active" @onclick="CloseClientBookingsModal">
+        <div class="modal-content client-bookings-modal" @onclick:stopPropagation="true">
+            <button class="modal-close-btn" @onclick="CloseClientBookingsModal">×</button>
+            
+            <h3 style="color: var(--gold); margin-bottom: 10px;">История бронирований</h3>
+            <h4 style="color: var(--text-gray); margin-bottom: 20px;">@selectedClientForModal.FullName</h4>
+            
+            @if (selectedClientBookings.Any())
+            {
+                <div class="client-bookings-list">
+                    <table class="client-bookings-table">
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Время</th>
+                                <th>Студия</th>
+                                <th>Оборудование</th>
+                                <th>Сумма</th>
+                                <th>Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var booking in selectedClientBookings)
+                            {
+                                <tr>
+                                    <td>
+                                        @booking.BookingDate.ToString("dd.MM.yyyy")
+                                    </td>
+
+                                    <td>
+                                        @booking.SlotTime
+                                    </td>
+
+                                    <td>
+                                        @booking.StudioName
+                                    </td>
+
+                                    <td>
+                                        @if (booking.EquipmentList.Any())
+                                        {
+                                            @string.Join(", ", booking.EquipmentList.Select(e => $"{e.Name} x{e.Quantity}"))
+                                        }
+                                        else
+                                        {
+                                            <span class="text-gray">—</span>
+                                        }
+                                    </td>
+
+                                    <td class="price-cell">
+                                        @booking.TotalPrice.ToString("N0") ₽
+                                    </td>
+
+                                    <td>
+                                        <span class="status-badge status-@booking.Status">
+                                            @GetStatusText(booking.Status)
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="client-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Всего бронирований:</span>
+                        <span class="stat-value">@selectedClientBookings.Count</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Общая сумма:</span>
+                        <span class="stat-value">@selectedClientBookings.Sum(b => b.TotalPrice).ToString("N0") ₽</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <p>У клиента нет бронирований</p>
+                </div>
+            }
+        </div>
+    </div>
+}
+@code {
+    private bool isLoading = true;
+    private string adminName = "";
+    private string activeTab = "bookings";
+    private List<ManagerBookingViewModel> allBookings = new();
+    private List<ManagerBookingViewModel> selectedDateBookings = new();
+    private decimal selectedDateTotal = 0;
+    private DateTime? selectedDate = DateTime.Today;
+    private string bookingSearchTerm = "";
+    private string bookingStatusFilter = "all";
+    private DateTime? historyDateFilter;
+    private void ShowBookingsTab() => SetActiveTab("bookings");
+    private void ShowStudiosTab() => SetActiveTab("studios");
+    private void ShowEquipmentTab() => SetActiveTab("equipment");
+    private void ShowPricingTab() => SetActiveTab("pricing");
+    private void ShowClientsTab() => SetActiveTab("clients");
+    private ManagerBookingViewModel? selectedBookingForModal = null;
+    private bool isBookingDetailsModalOpen = false;
+    private bool isStudioModalOpen = false;
+    private bool isEditingStudio = false;
+    private StudioEditModel studioEditModel = new();
+    private bool isEquipmentModalOpen = false;
+    private bool isEditingEquipment = false;
+    private EquipmentEditModel equipmentEditModel = new();
+    private bool isPricingRuleModalOpen = false;
+    private bool isEditingPricingRule = false;
+    private PricingRuleEditModel pricingRuleEditModel = new();
+    private List<StudioViewModel> studios = new();
+    private List<EquipmentViewModel> allEquipment = new();
+    private Dictionary<string, List<EquipmentViewModel>> equipmentByCategory = new();
+    private List<PricingRuleViewModel> pricingRules = new();
+    private List<ClientViewModel> allClients = new();
+    private string clientSearchTerm = "";
+    private bool isClientBookingsModalOpen = false;
+    private ClientViewModel? selectedClientForModal = null;
+    private List<ManagerBookingViewModel> selectedClientBookings = new();
+
+
+
+ public class PricingRuleEditModel
+{
+    public int RuleId { get; set; }
+
+    public int? StudioId { get; set; }
+    public int? DayOfWeek { get; set; }
+
+    public string? StartTime { get; set; }  
+    public string? EndTime { get; set; }    
+
+    public decimal Multiplier { get; set; }
+
+    public bool IsActive { get; set; }
+
+    public string? Description { get; set; }
+}
+// Методы для правил ценообразования
+private void OpenPricingRuleModal()
+{
+    isEditingPricingRule = false;
+    pricingRuleEditModel = new PricingRuleEditModel
+    {
+        Multiplier = 1.00m,
+        IsActive = true
+    };
+    isPricingRuleModalOpen = true;
+    StateHasChanged();
+}
+
+private void EditPricingRule(PricingRuleViewModel rule)
+{
+    isEditingPricingRule = true;
+    pricingRuleEditModel = new PricingRuleEditModel
+    {
+        RuleId = rule.RuleId,
+        StudioId = rule.StudioId,
+        DayOfWeek = rule.DayOfWeek,
+        StartTime = rule.StartTime,    
+        EndTime = rule.EndTime,        
+        Multiplier = rule.Multiplier,
+        IsActive = rule.IsActive,
+        Description = rule.Description
+    };
+    isPricingRuleModalOpen = true;
+    StateHasChanged();
+}
+
+private void ClosePricingRuleModal()
+{
+    isPricingRuleModalOpen = false;
+    pricingRuleEditModel = new();
+    StateHasChanged();
+}
+
+private async Task SavePricingRule()
+{
+    if (pricingRuleEditModel.Multiplier <= 0)
+    {
+        await JS.InvokeVoidAsync("alert", "Множитель должен быть больше 0");
+        return;
+    }
+
+    bool success;
+   if (isEditingPricingRule && pricingRuleEditModel.RuleId > 0)
+    {
+        success = await UserService.UpdatePricingRuleAsync(pricingRuleEditModel);
+    }
+    else
+    {
+        success = await UserService.CreatePricingRuleAsync(pricingRuleEditModel);
+    }
+
+    if (success)
+    {
+        await LoadPricingRules();
+        ClosePricingRuleModal();
+        await JS.InvokeVoidAsync("alert", isEditingPricingRule ? "Правило обновлено" : "Правило добавлено");
+        StateHasChanged();
+    }
+    else
+    {
+        await JS.InvokeVoidAsync("alert", "Ошибка при сохранении правила");
+    }
+}
+
+private async Task DeletePricingRule(int ruleId)
+{
+    if (!await JS.InvokeAsync<bool>("confirm", "Удалить правило ценообразования?"))
+        return;
+
+    var success = await UserService.DeletePricingRuleAsync(ruleId);
+    if (success)
+    {
+        await LoadPricingRules();
+        await JS.InvokeVoidAsync("alert", "Правило удалено");
+        StateHasChanged();
+    }
+    else
+    {
+        await JS.InvokeVoidAsync("alert", "Не удалось удалить правило");
+    }
+}
+
+
+    public class EquipmentEditModel
+{
+    public int? EquipmentId { get; set; }
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Category { get; set; } = "";
+    public decimal RentalPrice { get; set; }
+    public int Quantity { get; set; }
+    public string? ImageUrl { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+// Методы для оборудования
+private void OpenEquipmentModal()
+{
+    isEditingEquipment = false;
+    equipmentEditModel = new EquipmentEditModel
+    {
+        IsActive = true,
+        Quantity = 1
+    };
+    isEquipmentModalOpen = true;
+    StateHasChanged();
+}
+
+private void EditEquipment(EquipmentViewModel equipment)
+{
+    isEditingEquipment = true;
+    equipmentEditModel = new EquipmentEditModel
+    {
+        EquipmentId = equipment.EquipmentId,
+        Name = equipment.Name,
+        Description = equipment.Description,
+        Category = equipment.Category,
+        RentalPrice = equipment.RentalPrice,
+        Quantity = equipment.Quantity,
+        ImageUrl = equipment.ImageUrl,
+        IsActive = equipment.IsActive
+    };
+    isEquipmentModalOpen = true;
+    StateHasChanged();
+}
+
+private void CloseEquipmentModal()
+{
+    isEquipmentModalOpen = false;
+    equipmentEditModel = new();
+    StateHasChanged();
+}
+
+private async Task SaveEquipment()
+{
+    if (string.IsNullOrWhiteSpace(equipmentEditModel.Name))
+    {
+        await JS.InvokeVoidAsync("alert", "Введите название оборудования");
+        return;
+    }
+    if (equipmentEditModel.RentalPrice <= 0)
+    {
+        await JS.InvokeVoidAsync("alert", "Введите корректную стоимость");
+        return;
+    }
+    if (equipmentEditModel.Quantity <= 0)
+    {
+        await JS.InvokeVoidAsync("alert", "Количество должно быть больше 0");
+        return;
+    }
+    if (string.IsNullOrWhiteSpace(equipmentEditModel.Category))
+    {
+        await JS.InvokeVoidAsync("alert", "Введите категорию оборудования");
+        return;
+    }
+
+    bool success;
+    if (isEditingEquipment && equipmentEditModel.EquipmentId.HasValue)
+    {
+        success = await UserService.UpdateEquipmentAsync(equipmentEditModel);
+    }
+    else
+    {
+        success = await UserService.CreateEquipmentAsync(equipmentEditModel);
+    }
+
+    if (success)
+    {
+        await LoadEquipment();
+        CloseEquipmentModal();
+        await JS.InvokeVoidAsync("alert", isEditingEquipment ? "Оборудование обновлено" : "Оборудование добавлено");
+        StateHasChanged();
+    }
+    else
+    {
+        await JS.InvokeVoidAsync("alert", "Ошибка при сохранении оборудования");
+    }
+}
+
+private async Task DeleteEquipmentById(int equipmentId)
+{
+    if (!await JS.InvokeAsync<bool>("confirm", "Удалить оборудование? Это действие нельзя отменить."))
+        return;
+
+    var success = await UserService.DeleteEquipmentByIdAsync(equipmentId);
+    if (success)
+    {
+        await LoadEquipment();
+        await JS.InvokeVoidAsync("alert", "Оборудование удалено");
+        StateHasChanged();
+    }
+    else
+    {
+        await JS.InvokeVoidAsync("alert", "Не удалось удалить оборудование");
+    }
+}
+
+    public class StudioEditModel
+{
+    public int? StudioId { get; set; }
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Address { get; set; } = "";
+    public decimal? Area { get; set; }
+    public decimal? CeilingHeight { get; set; }
+    public string? WallColor { get; set; }
+    public bool HasNaturalLight { get; set; }
+    public decimal BasePrice { get; set; }
+    public bool IsActive { get; set; } = true;
+    public string? ImageUrl { get; set; }
+}
+
+// Методы для залов
+private void OpenStudioModal()
+{
+    isEditingStudio = false;
+    studioEditModel = new StudioEditModel
+    {
+        IsActive = true,
+        HasNaturalLight = false
+    };
+    isStudioModalOpen = true;
+    StateHasChanged();
+}
+
+private void EditStudio(StudioViewModel studio)
+{
+    isEditingStudio = true;
+    studioEditModel = new StudioEditModel
+    {
+        StudioId = studio.StudioId,
+        Name = studio.Name,
+        Description = studio.Description,
+        Address = studio.Address,
+        Area = studio.Area,
+        CeilingHeight = studio.CeilingHeight,
+        WallColor = studio.WallColor,
+        HasNaturalLight = studio.HasNaturalLight,
+        BasePrice = studio.BasePrice,
+        IsActive = studio.IsActive,
+        ImageUrl = studio.ImageUrl
+    };
+    isStudioModalOpen = true;
+    StateHasChanged();
+}
+
+private void CloseStudioModal()
+{
+    isStudioModalOpen = false;
+    studioEditModel = new();
+    StateHasChanged();
+}
+
+private async Task SaveStudio()
+{
+    if (string.IsNullOrWhiteSpace(studioEditModel.Name))
+    {
+        await JS.InvokeVoidAsync("alert", "Введите название зала");
+        return;
+    }
+    if (studioEditModel.BasePrice <= 0)
+    {
+        await JS.InvokeVoidAsync("alert", "Введите корректную стоимость");
+        return;
+    }
+
+    bool success;
+    if (isEditingStudio && studioEditModel.StudioId.HasValue)
+    {
+        success = await UserService.UpdateStudioAsync(studioEditModel);
+    }
+    else
+    {
+        success = await UserService.CreateStudioAsync(studioEditModel);
+    }
+
+    if (success)
+    {
+        await LoadStudios();
+        CloseStudioModal();
+        await JS.InvokeVoidAsync("alert", isEditingStudio ? "Зал обновлен" : "Зал добавлен");
+        StateHasChanged();
+    }
+    else
+    {
+        await JS.InvokeVoidAsync("alert", "Ошибка при сохранении зала");
+    }
+}
+
+private async Task DeleteStudio(int studioId)
+{
+    if (!await JS.InvokeAsync<bool>("confirm", "Удалить зал? Это действие нельзя отменить."))
+        return;
+
+    var success = await UserService.DeleteStudioAsync(studioId);
+    if (success)
+    {
+        await LoadStudios();
+        await JS.InvokeVoidAsync("alert", "Зал удален");
+        StateHasChanged();
+    }
+    else
+    {
+        await JS.InvokeVoidAsync("alert", "Не удалось удалить зал");
+    }
+}
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadAdminData();
+            await LoadAllData();
+            if (selectedDate.HasValue)
+            {
+                await LoadBookingsByDate();
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAdminData()
+    {
+        try
+        {
+            adminName = await JS.InvokeAsync<string>("localStorage.getItem", "userName") ?? "Администратор";
+            var userRole = await JS.InvokeAsync<string>("localStorage.getItem", "userRole");
+
+            if (userRole != "Admin")
+            {
+                if (userRole == "Manager")
+                {
+                    Navigation.NavigateTo("/manager", true);
+                }
+                else
+                {
+                    Navigation.NavigateTo("/", true);
+                }
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+            Navigation.NavigateTo("/login", true);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadAllData()
+    {
+        await LoadBookings();
+        await LoadStudios();
+        await LoadEquipment();
+        await LoadPricingRules();
+        await LoadClients();
+        if (selectedDate.HasValue)
+        {
+            await LoadBookingsByDate();
+        }
+    }
+
+    private async Task LoadBookings()
+    {
+        try
+        {
+            allBookings = await UserService.GetAllBookingsForManagerAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading bookings: {ex.Message}");
+        }
+    }
+
+   private async Task LoadStudios()
+{
+    try
+    {
+        studios = await UserService.GetAllStudiosForAdminAsync(); 
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error loading studios: {ex.Message}");
+    }
+}
+
+private async Task LoadEquipment()
+{
+    try
+    {
+        allEquipment = await UserService.GetAllEquipmentForAdminAsync(); 
+        equipmentByCategory = allEquipment
+            .GroupBy(e => e.Category)
+            .ToDictionary(g => g.Key, g => g.ToList());
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error loading equipment: {ex.Message}");
+    }
+}
+
+    private async Task LoadPricingRules()
+    {
+        try
+        {
+            pricingRules = await UserService.GetAllPricingRulesAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading pricing rules: {ex.Message}");
+        }
+    }
+
+    private async Task LoadClients()
+    {
+        try
+        {
+            allClients = await UserService.GetAllClientsWithStatsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading clients: {ex.Message}");
+        }
+    }
+
+    private async Task OnDateChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && DateTime.TryParse(e.Value.ToString(), out DateTime date))
+        {
+            selectedDate = date;
+            await LoadBookingsByDate();
+        }
+    }
+
+private async Task LoadBookingsByDate()
+{
+    if (!selectedDate.HasValue) return;
+    
+    selectedDateBookings = allBookings
+        .Where(b => b.BookingDate.Date == selectedDate.Value.Date)
+        .OrderBy(b => b.SlotTime)
+        .ToList();
+    
+    selectedDateTotal = selectedDateBookings
+        .Where(b => b.Status == "confirmed" || b.Status == "completed")
+        .Sum(b => b.TotalPrice);
+    
+    StateHasChanged();
+}
+
+  private async Task GenerateReport()
+{
+    if (!selectedDate.HasValue || !selectedDateBookings.Any()) return;
+    
+    try
+    {
+        var totalForReport = selectedDateBookings
+            .Where(b => b.Status == "confirmed" || b.Status == "completed")
+            .Sum(b => b.TotalPrice);
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("<!DOCTYPE html>");
+        sb.AppendLine("<html>");
+        sb.AppendLine("<head>");
+        sb.AppendLine("<meta charset='UTF-8'>");
+        sb.AppendLine("<title>Отчет о бронированиях</title>");
+        sb.AppendLine("<style>");
+        sb.AppendLine("body { font-family: Arial, sans-serif; margin: 40px; background: #fff; }");
+        sb.AppendLine("h1 { color: #333; border-bottom: 2px solid #ffd700; padding-bottom: 10px; }");
+        sb.AppendLine("h2 { color: #555; margin-top: 20px; }");
+        sb.AppendLine("table { border-collapse: collapse; width: 100%; margin-top: 20px; }");
+        sb.AppendLine("th, td { border: 1px solid #ddd; padding: 12px 10px; text-align: left; vertical-align: top; }");
+        sb.AppendLine("th { background-color: #f5f5f5; font-weight: bold; }");
+        sb.AppendLine("tr:nth-child(even) { background-color: #f9f9f9; }");
+        sb.AppendLine(".total { font-weight: bold; margin-top: 20px; font-size: 18px; text-align: right; }");
+        sb.AppendLine(".footer { margin-top: 30px; text-align: center; color: #888; font-size: 12px; }");
+        sb.AppendLine(".status-cancelled { color: #dc3545; }");
+        sb.AppendLine(".status-pending { color: #ffc107; }");
+        sb.AppendLine(".status-confirmed { color: #28a745; }");
+        sb.AppendLine(".status-completed { color: #17a2b8; }");
+        sb.AppendLine("</style>");
+        sb.AppendLine("</head>");
+        sb.AppendLine("<body>");
+        sb.AppendLine($"<h1>Отчет о бронированиях</h1>");
+        sb.AppendLine($"<h2>Дата: {selectedDate.Value:dd.MM.yyyy}</h2>");
+        
+        sb.AppendLine("<table>");
+        sb.AppendLine("<thead>");
+        sb.AppendLine("<tr>");
+        sb.AppendLine("<th>Время</th>");
+        sb.AppendLine("<th>Студия</th>");
+        sb.AppendLine("<th>Клиент</th>");
+        sb.AppendLine("<th>Оборудование</th>");
+        sb.AppendLine("<th>Сумма</th>");
+        sb.AppendLine("<th>Статус</th>");
+        sb.AppendLine("</tr>");
+        sb.AppendLine("</thead>");
+        sb.AppendLine("<tbody>");
+        
+        foreach (var booking in selectedDateBookings)
+        {
+            var equipment = booking.EquipmentList.Any() 
+                ? string.Join(", ", booking.EquipmentList.Select(e => $"{e.Name} x{e.Quantity}"))
+                : "—";
+            
+            var statusText = GetStatusText(booking.Status);
+            var statusClass = "";
+            
+            switch (booking.Status)
+            {
+                case "cancelled":
+                    statusClass = "status-cancelled";
+                    break;
+                case "pending":
+                    statusClass = "status-pending";
+                    break;
+                case "confirmed":
+                    statusClass = "status-confirmed";
+                    break;
+                case "completed":
+                    statusClass = "status-completed";
+                    break;
+            }
+            
+            sb.AppendLine("<tr>");
+            sb.AppendLine($"<td>{booking.SlotTime}</td>");
+            sb.AppendLine($"<td>{System.Net.WebUtility.HtmlEncode(booking.StudioName)}</td>");
+            sb.AppendLine($"<td>{System.Net.WebUtility.HtmlEncode(booking.ClientName)}</td>");
+            sb.AppendLine($"<td>{System.Net.WebUtility.HtmlEncode(equipment)}</td>");
+            sb.AppendLine($"<td>{booking.TotalPrice:N0} ₽</td>");
+            sb.AppendLine($"<td class='{statusClass}'>{statusText}</td>");
+            sb.AppendLine("</tr>");
+        }
+        
+        sb.AppendLine("</tbody>");
+        sb.AppendLine("</table>");
+        sb.AppendLine($"<div class='total'>Общая выручка: {totalForReport:N0} ₽</div>");
+        sb.AppendLine("<div class='footer'>Отчет сгенерирован " + DateTime.Now.ToString("dd.MM.yyyy HH:mm") + "</div>");
+        sb.AppendLine("</body>");
+        sb.AppendLine("</html>");
+        
+        var html = sb.ToString();
+        var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(html));
+        var dataUrl = $"data:application/vnd.ms-excel;base64,{base64}";
+        
+        await JS.InvokeVoidAsync("eval", $@"
+            var link = document.createElement('a');
+            link.download = 'report_{selectedDate.Value:yyyyMMdd}.html';
+            link.href = '{dataUrl}';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        ");
+        
+        await JS.InvokeVoidAsync("alert", $"Отчет за {selectedDate.Value:dd.MM.yyyy} успешно сформирован");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error generating report: {ex.Message}");
+        await JS.InvokeVoidAsync("alert", "Ошибка при формировании отчета");
+    }
+}
+    private async Task ConfirmBooking(int bookingId)
+    {
+        await UserService.ConfirmBookingAsync(bookingId);
+        await LoadBookings();
+        if (selectedDate.HasValue) await LoadBookingsByDate();
+        StateHasChanged();
+    }
+
+    private async Task CancelBooking(int bookingId)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Отменить бронирование?")) return;
+        await UserService.CancelBookingAsync(bookingId);
+        await LoadBookings();
+        if (selectedDate.HasValue) await LoadBookingsByDate();
+        StateHasChanged();
+    }
+
+  private void ViewBookingDetails(ManagerBookingViewModel booking)
+{
+    selectedBookingForModal = booking;
+    isBookingDetailsModalOpen = true;
+    StateHasChanged();
+}
+
+private void CloseBookingDetailsModal()
+{
+    isBookingDetailsModalOpen = false;
+    selectedBookingForModal = null;
+    StateHasChanged();
+}
+
+   private async Task ViewClientBookings(ClientViewModel client)
+{
+    var clientBookings = allBookings.Where(b => b.ClientName == client.FullName).OrderByDescending(b => b.BookingDate).ToList();
+    
+    selectedClientForModal = client;
+    selectedClientBookings = clientBookings;
+    isClientBookingsModalOpen = true;
+    StateHasChanged();
+}
+
+private void CloseClientBookingsModal()
+{
+    isClientBookingsModalOpen = false;
+    selectedClientForModal = null;
+    selectedClientBookings = new();
+    StateHasChanged();
+}
+
+    private void ViewClientHistory(ClientViewModel client)
+    {
+        _ = ViewClientBookings(client);
+    }
+
+    private void SetActiveTab(string tab)
+    {
+        activeTab = tab;
+        if (tab == "bookings") _ = LoadBookings();
+        if (tab == "studios") _ = LoadStudios();
+        if (tab == "equipment") _ = LoadEquipment();
+        if (tab == "pricing") _ = LoadPricingRules();
+        if (tab == "clients") _ = LoadClients();
+        StateHasChanged();
+    }
+
+private string GetStatusText(string status) => status switch
+{
+    "pending" => "Ожидает",
+    "confirmed" => "Подтверждено",
+    "paid" => "Оплачено",
+    "completed" => "Завершено",
+    "cancelled" => "Отменено",
+    _ => status
+};
+
+    private List<ManagerBookingViewModel> filteredAllBookings => allBookings
+        .Where(b => (bookingStatusFilter == "all" || b.Status == bookingStatusFilter) &&
+                    (string.IsNullOrEmpty(bookingSearchTerm) ||
+                     b.ClientName.Contains(bookingSearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                     b.StudioName.Contains(bookingSearchTerm, StringComparison.OrdinalIgnoreCase)) &&
+                    (!historyDateFilter.HasValue || b.BookingDate.Date == historyDateFilter.Value.Date))
+        .OrderByDescending(b => b.BookingDate)
+        .ToList();
+
+    private List<ClientViewModel> filteredClientsList => allClients
+        .Where(c => string.IsNullOrEmpty(clientSearchTerm) ||
+                    c.FullName.Contains(clientSearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    c.Email.Contains(clientSearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    (c.Phone?.Contains(clientSearchTerm) ?? false))
+        .OrderBy(c => c.FullName)
+        .ToList();
+
+    private async Task Logout()
+    {
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userId");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userEmail");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userName");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userRole");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "isAuthenticated");
+
+        AppStateService.IsAuthenticated = false;
+        AppStateService.UserName = "";
+        Navigation.NavigateTo("/", true);
+    }
+
+ 
+public class PricingRuleViewModel
+{
+    public int RuleId { get; set; }
+    public int? StudioId { get; set; }
+    public string? StudioName { get; set; }
+
+    public int? DayOfWeek { get; set; }
+    public string? DayOfWeekName { get; set; }
+
+    public string? StartTime { get; set; }  
+    public string? EndTime { get; set; }   
+
+    public string? TimeRange { get; set; }
+
+    public decimal Multiplier { get; set; }
+
+    public bool IsActive { get; set; }
+
+    public string? Description { get; set; }
+}}

@@ -1,0 +1,371 @@
+﻿@page "/register"
+@rendermode InteractiveServer
+@using StudioFlow.Services
+@using System.Text.RegularExpressions
+@inject IUserService UserService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject AppStateService AppStateService
+@inject AuthStateService AuthStateService
+@inject AuthService AuthService
+
+<PageTitle>StudioFlow - Регистрация</PageTitle>
+<link rel="stylesheet" href="css/register.css" />
+
+<div class="register-container">
+    <div class="register-card">
+        <div class="register-header">
+            <h1>Регистрация</h1>
+            <p>Создайте аккаунт в StudioFlow</p>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert-error">
+                @errorMessage
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(successMessage))
+        {
+            <div class="alert-success">
+                @successMessage
+            </div>
+        }
+
+        <!-- ФИО -->
+        <div class="form-group">
+            <label for="fullName">ФИО *</label>
+            <input id="fullName" 
+                   type="text" 
+                   class="form-control @(fullNameError ? "error" : "")" 
+                   @bind="fullName" 
+                   @bind:event="oninput" 
+                   placeholder="Иванов Иван Иванович" />
+            @if (fullNameError)
+            {
+                <div class="field-error">Введите ФИО (минимум 2 слова)</div>
+            }
+        </div>
+
+        <!-- Email -->
+        <div class="form-group">
+            <label for="email">Email *</label>
+            <input id="email" 
+                   type="email" 
+                   class="form-control @(emailError ? "error" : "")" 
+                   @bind="email" 
+                   @bind:event="oninput" 
+                   placeholder="ivanov@example.com" />
+            @if (emailError)
+            {
+                <div class="field-error">Введите корректный email (например: name@domain.ru)</div>
+            }
+        </div>
+
+        <!-- Телефон -->
+        <div class="form-group">
+            <label for="phone">Телефон</label>
+            <input id="phone"
+                   type="tel"
+                   class="form-control @(phoneError ? "error" : "")"
+                   value="@phone"
+                   @oninput="OnPhoneInput"
+                   placeholder="+7 999 123-45-67" />
+            @if (phoneError)
+            {
+                <div class="field-error"> Введите 10 цифр после +7 (например: 9991234567)</div>
+            }
+            <small class="form-hint">Пример: +7 999 123-45-67</small>
+        </div>
+
+        <!-- Пароль -->
+        <div class="form-group">
+            <label for="password">Пароль *</label>
+            <input id="password" 
+                   type="password" 
+                   class="form-control @(passwordError ? "error" : "")" 
+                   @bind="password" 
+                   @bind:event="oninput" />
+            <div class="password-requirements">
+                <div class="req-item @(passwordLengthValid ? "valid" : "invalid")">
+                    <span>@(passwordLengthValid ? "" : "")</span> Минимум 6 символов
+                </div>
+                <div class="req-item @(passwordDigitValid ? "valid" : "invalid")">
+                    <span>@(passwordDigitValid ? "" : "")</span> Хотя бы одна цифра (0-9)
+                </div>
+                <div class="req-item @(passwordSpecialValid ? "valid" : "invalid")">
+                    <span>@(passwordSpecialValid ? "" : "")</span> Хотя бы один спецсимвол (!@@$%^&*)
+                </div>
+                <div class="req-item @(passwordUpperValid ? "valid" : "invalid")">
+                    <span>@(passwordUpperValid ? "" : "")</span> Хотя бы одна заглавная буква (A-Z)
+                </div>
+            </div>
+        </div>
+
+        <!-- Подтверждение пароля -->
+        <div class="form-group">
+            <label for="confirmPassword">Подтверждение пароля *</label>
+            <input id="confirmPassword" 
+                   type="password" 
+                   class="form-control @(confirmPasswordError ? "error" : "")" 
+                   @bind="confirmPassword" 
+                   @bind:event="oninput" />
+            @if (confirmPasswordError)
+            {
+                <div class="field-error">Пароли не совпадают</div>
+            }
+        </div>
+
+        <button class="btn-register" @onclick="HandleRegister" disabled="@isLoading">
+            @if (isLoading)
+            {
+                <span>Регистрация...</span>
+            }
+            else
+            {
+                <span>Зарегистрироваться</span>
+            }
+        </button>
+
+        <div class="register-footer">
+            <p style="color:aliceblue">Уже есть аккаунт? <a href="/login">Войти</a></p>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string fullName = "";
+    private string email = "";
+    private string phone = "+7";
+    private string password = "";
+    private string confirmPassword = "";
+    private bool isLoading = false;
+    private string errorMessage = "";
+    private string successMessage = "";
+    private bool fullNameError = false;
+    private bool emailError = false;
+    private bool phoneError = false;
+    private bool passwordError = false;
+    private bool confirmPasswordError = false;
+
+    // Валидация пароля
+    private bool passwordLengthValid => password.Length >= 6;
+    private bool passwordDigitValid => Regex.IsMatch(password, "\\d");
+    private bool passwordSpecialValid => Regex.IsMatch(password, "[!@@$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>\\/?]");
+    private bool passwordUpperValid => Regex.IsMatch(password, "[A-Z]");
+    private bool passwordIsValid => passwordLengthValid && passwordDigitValid && passwordSpecialValid && passwordUpperValid;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var isAuth = await AuthService.IsAuthenticatedAsync();
+        if (isAuth)
+        {
+            var userRole = AppStateService.UserRole;
+            if (userRole == "Admin")
+                Navigation.NavigateTo("/admin", true);
+            else if (userRole == "Manager")
+                Navigation.NavigateTo("/manager", true);
+            else
+                Navigation.NavigateTo("/profile", true);
+        }
+    }
+
+    private void OnPhoneInput(ChangeEventArgs e)
+    {
+        var input = e.Value?.ToString() ?? "";
+
+        var digits = Regex.Replace(input, "[^0-9]", "");
+
+        if (digits.Length > 0)
+        {
+            if (!digits.StartsWith("7"))
+            {
+                digits = "7" + digits;
+            }
+
+
+            if (digits.Length > 11)
+            {
+                digits = digits.Substring(0, 11);
+            }
+
+            var restDigits = digits.Length > 1 ? digits.Substring(1) : "";
+            phone = $"+7{restDigits}";
+        }
+        else
+        {
+            phone = "+7";
+        }
+
+        StateHasChanged();
+    }
+
+    private bool ValidateFields()
+    {
+        bool isValid = true;
+        errorMessage = "";
+
+        // Валидация ФИО
+        var nameParts = fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (string.IsNullOrWhiteSpace(fullName) || nameParts.Length < 2)
+        {
+            fullNameError = true;
+            isValid = false;
+        }
+        else
+        {
+            fullNameError = false;
+        }
+
+        // Валидация Email
+        if (string.IsNullOrWhiteSpace(email) || !IsValidEmail(email))
+        {
+            emailError = true;
+            isValid = false;
+        }
+        else
+        {
+            emailError = false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(phone) && phone != "+7")
+        {
+            var phoneDigits = Regex.Replace(phone, "[^0-9]", "");
+
+            bool hasCorrectLength = phoneDigits.Length == 11;
+
+            if (!hasCorrectLength)
+            {
+                phoneError = true;
+                isValid = false;
+            }
+            else
+            {
+                phoneError = false;
+            }
+        }
+        else if (phone == "+7")
+        {
+            phoneError = false;
+        }
+        else
+        {
+            phoneError = false;
+        }
+
+        if (string.IsNullOrWhiteSpace(password) || !passwordIsValid)
+        {
+            passwordError = true;
+            isValid = false;
+        }
+        else
+        {
+            passwordError = false;
+        }
+
+        if (password != confirmPassword)
+        {
+            confirmPasswordError = true;
+            isValid = false;
+        }
+        else
+        {
+            confirmPasswordError = false;
+        }
+
+        if (!isValid)
+        {
+            errorMessage = "Пожалуйста, исправьте ошибки в форме";
+        }
+
+        return isValid;
+    }
+
+    private async Task HandleRegister()
+    {
+        isLoading = true;
+        errorMessage = "";
+        successMessage = "";
+
+        try
+        {
+            if (!ValidateFields())
+            {
+                return;
+            }
+
+            var userExists = await UserService.UserExistsAsync(email);
+            if (userExists)
+            {
+                errorMessage = "Пользователь с таким email уже существует";
+                return;
+            }
+
+            var success = await UserService.CreateUserAsync(fullName, email, password, phone, "Client");
+
+            if (success)
+            {
+                successMessage = "Регистрация прошла успешно! Выполняется вход...";
+
+                var user = await UserService.AuthenticateAsync(email, password);
+
+                if (user != null)
+                {
+                    string roleName = user.Role?.RoleName ?? "Client";
+
+                    await JS.InvokeVoidAsync("localStorage.setItem", "userId", user.UserId.ToString());
+                    await JS.InvokeVoidAsync("localStorage.setItem", "userEmail", user.Email);
+                    await JS.InvokeVoidAsync("localStorage.setItem", "userName", user.FullName);
+                    await JS.InvokeVoidAsync("localStorage.setItem", "userRole", roleName);
+                    await JS.InvokeVoidAsync("localStorage.setItem", "isAuthenticated", "true");
+
+                    AppStateService.IsAuthenticated = true;
+                    AppStateService.UserName = user.FullName;
+                    AppStateService.UserRole = roleName;
+
+                    AuthStateService.NotifyUserLogin(
+                        user.UserId.ToString(),
+                        user.Email,
+                        user.FullName,
+                        roleName
+                    );
+
+                    await UserService.UpdateLastLoginAsync(user.UserId);
+                    Navigation.NavigateTo("/profile", true);
+                }
+                else
+                {
+                    Navigation.NavigateTo("/login", true);
+                }
+            }
+            else
+            {
+                errorMessage = "Ошибка при регистрации. Попробуйте позже.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка: {ex.Message}";
+            Console.WriteLine($"Registration error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private bool IsValidEmail(string email)
+    {
+        try
+        {
+            var regex = new Regex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$");
+            return regex.IsMatch(email);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+}

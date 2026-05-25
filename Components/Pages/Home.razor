@@ -1,0 +1,92 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Components
+@inject NavigationManager Navigation
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudioFlow — Пространство для творчества</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <div class="hero">
+        <div class="container">
+            <div class="hero-content">
+                
+                <h1>Пространство, где<br>рождается творчество</h1>
+                <p class="hero-subtitle">
+                    Современная фотостудия премиум-класса с профессиональным оборудованием
+                    и уникальными интерьерами для любых задач
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="section section-dark">
+        <div class="container">
+            <div class="section-header">
+                <h2> Почему <span class="accent"> StudioFlow </span> ?</h2>
+                <p>Мы создали идеальное пространство для фотографов, видеографов и творческих команд</p>
+            </div>
+            <div class="benefits-grid">
+                <div class="benefit-card">
+
+                    <h3>Профессиональное оборудование</h3>
+                    <p>Более 100 единиц топового оборудования: свет Godox и Profoto, камеры Sony и Canon, штативы Manfrotto</p>
+                </div>
+                <div class="benefit-card">
+
+                    <h3>7 уникальных залов</h3>
+                    <p>От классической циклорамы до зала Mosaic с 5+ мини-локациями — найдется пространство для любой идеи</p>
+                </div>
+                <div class="benefit-card">
+
+                    <h3>Удобное бронирование</h3>
+                    <p>Интерактивное расписание, быстрое подтверждение, возможность добавления оборудования к брони</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number">7</div>
+                    <div class="stat-label">ФОТОЗАЛОВ</div>
+                </div>
+              
+                <div class="stat-item">
+                    <div class="stat-number">100+</div>
+                    <div class="stat-label">ЕДИНИЦ ОБОРУДОВАНИЯ</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">450</div>
+                    <div class="stat-label">М² ОБЩЕЙ ПЛОЩАДИ</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mission">
+        <div class="container">
+            <div class="mission-content">
+                <div class="mission-text">
+                    <h3>Наша миссия —<br>вдохновлять на творчество</h3>
+                    <p>StudioFlow родилась из любви к фотографии и желания создать пространство, где каждый сможет реализовать свои идеи без ограничений. Мы объединили лучшее: профессиональное оборудование, уникальные интерьеры и удобный сервис бронирования.</p>
+                    <div class="mission-quote">
+                        "Мы верим, что правильное пространство — это половина успеха съемки. Поэтому каждая деталь в наших залах продумана до мелочей."
+                    </div>
+                </div>
+                <div class="mission-image">
+                    <img src="images/main/main1.png"/>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

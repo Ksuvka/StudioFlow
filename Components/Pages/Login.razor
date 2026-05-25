@@ -1,0 +1,138 @@
+﻿@page "/login"
+@rendermode InteractiveServer
+@using StudioFlow.Services
+@inject IUserService UserService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject AppStateService AppStateService
+@inject AuthStateService AuthStateService
+@inject AuthService AuthService
+<PageTitle>StudioFlow - Авторизация</PageTitle>
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <h1>Вход в аккаунт</h1>
+            <p>Добро пожаловать в StudioFlow</p>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert-error" style="color: red; background: #ffeeee; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                @errorMessage
+            </div>
+        }
+
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input id="email" type="email" class="form-control" @bind="email" @bind:event="oninput" />
+        </div>
+
+        <div class="form-group">
+            <label for="password">Пароль</label>
+            <input id="password" type="password" class="form-control" @bind="password" @bind:event="oninput" />
+        </div>
+
+        <div class="form-group checkbox">
+            <input id="rememberMe" type="checkbox" @bind="rememberMe" />
+            <label for="rememberMe">Запомнить меня</label>
+        </div>
+
+        <button class="btn-login" @onclick="HandleLogin" disabled="@isLoading">
+            @if (isLoading)
+            {
+                <span>Вход...</span>
+            }
+            else
+            {
+                <span>Войти</span>
+            }
+        </button>
+
+        <div class="login-footer">
+            <p style="color:aliceblue">Нет аккаунта? <a href="/register">Зарегистрироваться</a></p>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string email = "";
+    private string password = "";
+    private bool rememberMe = false;
+    private bool isLoading = false;
+    private string errorMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var isAuth = await AuthService.IsAuthenticatedAsync();
+        if (isAuth)
+        {
+            Navigation.NavigateTo("/profile", true);
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        isLoading = true;
+        errorMessage = "";
+
+        try
+        {
+            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
+            {
+                errorMessage = "Введите email и пароль";
+                return;
+            }
+
+            var user = await UserService.AuthenticateAsync(email, password);
+
+            if (user != null)
+            {
+                string roleName = user.Role?.RoleName ?? "Client";
+
+                await JS.InvokeVoidAsync("localStorage.setItem", "userId", user.UserId.ToString());
+                await JS.InvokeVoidAsync("localStorage.setItem", "userEmail", user.Email);
+                await JS.InvokeVoidAsync("localStorage.setItem", "userName", user.FullName);
+                await JS.InvokeVoidAsync("localStorage.setItem", "userRole", roleName);
+                await JS.InvokeVoidAsync("localStorage.setItem", "isAuthenticated", "true");
+
+                AppStateService.IsAuthenticated = true;
+                AppStateService.UserName = user.FullName;
+                AppStateService.UserRole = roleName;
+
+                AuthStateService.NotifyUserLogin(
+                    user.UserId.ToString(),
+                    user.Email,
+                    user.FullName,
+                    roleName
+                );
+
+                await UserService.UpdateLastLoginAsync(user.UserId);
+
+                if (roleName == "Admin")
+                {
+                    Navigation.NavigateTo("/admin", true);
+                }
+                else if (roleName == "Manager")
+                {
+                    Navigation.NavigateTo("/manager", true);
+                }
+                else
+                {
+                    Navigation.NavigateTo("/profile", true);
+                }
+            }
+            else
+            {
+                errorMessage = "Неверный email или пароль";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

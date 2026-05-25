@@ -1,0 +1,214 @@
+﻿@page "/studios"
+@rendermode InteractiveServer
+@using StudioFlow.Models
+@using StudioFlow.Services
+@inject IUserService UserService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject AppStateService AppStateService
+<link rel="stylesheet" href="/css/Studios.css" />
+<PageTitle>StudioFlow - Студии</PageTitle>
+
+<div class="studios-container" style="background: #0b0b0f">
+    <div class="studios-header">
+        <h1>Наши залы</h1>
+        <p>Выберите идеальное пространство для вашей съемки</p>
+    </div>
+
+    <!-- ФИЛЬТРАЦИЯ -->
+    <div class="filters-section">
+        <div class="filters-container">
+            <div class="filter-group">
+                <label>Естественный свет</label>
+                <div class="filter-buttons">
+                    <button class="filter-btn @(naturalLightFilter == "all" ? "active" : "")"
+                            @onclick="SetNaturalLightFilterAll">
+                        Все
+                    </button>
+                    <button class="filter-btn @(naturalLightFilter == "yes" ? "active" : "")"
+                            @onclick="SetNaturalLightFilterYes">
+                        Есть
+                    </button>
+                    <button class="filter-btn @(naturalLightFilter == "no" ? "active" : "")"
+                            @onclick="SetNaturalLightFilterNo">
+                        Нет
+                    </button>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label>Площадь (м²)</label>
+                <div class="filter-range">
+                    <input type="range"
+                           min="0"
+                           max="150"
+                           step="10"
+                           value="@areaMax"
+                           @oninput="OnAreaRangeChange"
+                           class="area-slider" />
+                    <div class="range-values">
+                        <span>Любая</span>
+                        <span>до @areaMax м²</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>Загрузка залов...</p>
+        </div>
+    }
+    else if (filteredStudios.Any())
+    {
+        <div class="studios-grid">
+            @foreach (var studio in filteredStudios)
+            {
+                <div class="studio-card">
+                    <div class="studio-image">
+                        @if (!string.IsNullOrEmpty(studio.ImageUrl))
+                        {
+                            <img src="@studio.ImageUrl" alt="@studio.Name" />
+                        }
+                        else
+                        {
+                            <div class="studio-image-placeholder">
+                                <i class="fas fa-camera"></i>
+                            </div>
+                        }
+                    </div>
+                    <div class="studio-content">
+                        <h2>@studio.Name</h2>
+                        <div class="studio-features">
+                            @if (studio.Area.HasValue)
+                            {
+                                <span class="feature">
+                                    <i class="fas fa-arrows-alt"></i> @studio.Area м²
+                                </span>
+                            }
+                            @if (studio.CeilingHeight.HasValue)
+                            {
+                                <span class="feature">
+                                    <i class="fas fa-chart-line"></i> @studio.CeilingHeight м
+                                </span>
+                            }
+                            @if (studio.HasNaturalLight)
+                            {
+                                <span class="feature">
+                                    <i class="fas fa-sun"></i> Естественный свет
+                                </span>
+                            }
+                        </div>
+                        <p class="studio-description">@studio.Description</p>
+                        <div class="studio-footer">
+                            <div class="studio-price">
+                                <span class="price">@studio.BasePrice.ToString("N0") ₽</span>
+                                <span class="price-period">/час</span>
+                            </div>
+                            <button class="btn-book" @onclick="() => BookStudio(studio.StudioId)">
+                                Забронировать
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="no-results">
+            <i class="fas fa-search"></i>
+            <h3>Ничего не найдено</h3>
+            <p>Попробуйте изменить параметры фильтрации</p>
+            <button class="btn-reset" @onclick="ResetFilters">Сбросить фильтры</button>
+        </div>
+    }
+</div>
+
+@code {
+    private List<StudioViewModel> studios = new();
+    private List<StudioViewModel> filteredStudios = new();
+    private bool isLoading = true;
+    private void SetNaturalLightFilterAll() => SetNaturalLightFilter("all");
+    private void SetNaturalLightFilterYes() => SetNaturalLightFilter("yes");
+    private void SetNaturalLightFilterNo() => SetNaturalLightFilter("no");
+    private void SetNaturalLightFilter(string value)
+    {
+        naturalLightFilter = value;
+        ApplyFilters(); 
+    }
+
+    private string naturalLightFilter = "all"; 
+    private int areaMax = 150;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadStudios();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadStudios()
+    {
+        isLoading = true;
+        try
+        {
+            studios = await UserService.GetAllStudiosAsync();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading studios: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        var query = studios.AsQueryable();
+
+        if (naturalLightFilter == "yes")
+        {
+            query = query.Where(s => s.HasNaturalLight);
+        }
+        else if (naturalLightFilter == "no")
+        {
+            query = query.Where(s => !s.HasNaturalLight);
+        }
+        query = query.Where(s => (s.Area ?? 0) <= areaMax);
+
+        filteredStudios = query.ToList();
+        StateHasChanged();
+    }
+
+
+
+    private void OnAreaRangeChange(ChangeEventArgs e)
+    {
+        if (e.Value != null && int.TryParse(e.Value.ToString(), out int value))
+        {
+            areaMax = value;
+            ApplyFilters();
+        }
+    }
+
+    private void ResetFilters()
+    {
+        naturalLightFilter = "all";
+        areaMax = 150;
+        ApplyFilters();
+    }
+
+    private void BookStudio(int studioId)
+    {
+        Navigation.NavigateTo($"/booking/{studioId}");
+    }
+}

@@ -1,0 +1,29 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<div class="page">
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="nav-logo">
+                    <a href="/">
+                        <i class="fas fa-camera"></i>
+                        <span>StudioFlow</span>
+                    </a>
+                </div>
+                <div class="nav-links">
+                    <a href="/" class="nav-link">О нас</a>
+                    <a href="/studios" class="nav-link">Залы</a>
+                    <a href="/equipment" class="nav-link">Оборудование</a>
+                    <a href="/login" class="nav-link login-btn">Вход</a>
+                    <a href="/register" class="nav-link register-btn">Регистрация</a>
+                </div>
+            </div>
+        </nav>
+    
+    <main class="main-content">
+        <div class="content-container">
+            @Body
+        </div>
+    </main>
+</div>

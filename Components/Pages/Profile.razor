@@ -1,0 +1,1495 @@
+﻿ @page "/profile"
+@rendermode InteractiveServer
+@using StudioFlow.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject IUserService UserService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject AppStateService AppStateService
+@inject AuthService AuthService
+
+<PageTitle>StudioFlow - Профиль</PageTitle>
+<link rel="stylesheet" href="css/profileClient.css" />
+
+<div class="profile-container">
+    @if (isLoading)
+    {
+        <div style="text-align: center; padding: 50px;">
+            <div class="loader"></div>
+            <h3 style="color: var(--text-gray); margin-top: 20px;">Загрузка профиля...</h3>
+        </div>
+    }
+    else if (isAuthenticated)
+    {
+        <div class="profile-card">
+            <!-- Шапка с ФИО, email и кнопками -->
+            <div class="profile-header-top">
+                <div class="profile-header-info">
+                    <h1>@userFullName</h1>
+                    <p>@userEmail</p>
+                </div>
+
+                <!-- Кнопки в шапке: редактировать + выйти -->
+                <div class="profile-header-actions">
+                    <button class="btn-edit-profile" @onclick="OpenEditProfileModal">
+                        Редактировать профиль
+                    </button>
+                    <button class="btn-logout-top" @onclick="Logout">
+                        Выйти
+                    </button>
+                </div>
+            </div>
+
+            <div class="profile-info">
+                <div class="info-section">
+                    <h3>Личная информация</h3>
+                    <div class="info-row">
+                        <span class="info-label">ФИО:</span>
+                        <span class="info-value">@userFullName</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Email:</span>
+                        <span class="info-value">@userEmail</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Телефон:</span>
+                        <span class="info-value">@userPhone</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Дата регистрации:</span>
+                        <span class="info-value">@userCreatedAt</span>
+                    </div>
+                </div>
+
+                <div class="stats-section">
+                    <h3>Моя статистика</h3>
+                    <div class="stats-row">
+                        <div class="stat">
+                            <div class="stat-number">@totalBookings</div>
+                            <div class="stat-label">Всего бронирований</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">@completedBookings</div>
+                            <div class="stat-label">Завершено</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">@totalSpent.ToString("N0")</div>
+                            <div class="stat-label">Потрачено (₽)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bookings-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                        <h3>Мои бронирования</h3>
+                        <button class="btn btn-primary" @onclick="GoToBooking">+ Добавить бронь</button>
+                    </div>
+
+                    @if (userBookings.Any())
+                    {
+                        <div class="bookings-list">
+                            @foreach (var booking in userBookings)
+                            {
+                                <div class="booking-item">
+                               
+                                    <div class="booking-header">
+                                        <div class="booking-studio">Зал: @booking.StudioName</div>
+                                        <div class="booking-status status-@booking.Status.ToLower()">
+                                            @GetStatusText(booking.Status)
+                                        </div>
+                                    </div>
+
+                                  
+                                    <div class="booking-info-left">
+                                        <div class="booking-info-row">
+                                            <span class="booking-info-label">Дата:</span>
+                                            <span class="booking-info-value">@booking.BookingDate.ToString("dd.MM.yyyy")</span>
+                                        </div>
+                                        <div class="booking-info-row">
+                                            <span class="booking-info-label">Время:</span>
+                                            <span class="booking-info-value">@booking.SlotTime</span>
+                                        </div>
+                                        <div class="booking-info-row">
+                                            <span class="booking-info-label">Стоимость:</span>
+                                            <span class="booking-info-value price">@booking.TotalPrice.ToString("N0") ₽</span>
+                                        </div>
+
+                                        @if (!string.IsNullOrEmpty(booking.Comment))
+                                        {
+                                            <div class="booking-comment-block">
+                                                <div class="booking-comment-label">Комментарий:</div>
+                                                <p class="booking-comment-text">@booking.Comment</p>
+                                            </div>
+                                        }
+                                    </div>
+
+                                  
+                                    <div class="booking-footer">
+                                        @if (booking.Status == "paid" || booking.Status == "pending" || booking.Status == "confirmed")
+                                        {
+                                            if (cancelDeadlines.TryGetValue(booking.BookingId, out var deadlineMsk) && deadlineMsk.HasValue)
+                                            {
+                                                var nowMsk = DateTime.UtcNow.AddHours(3);
+
+                                                <div class="cancel-info">
+                                                    <span class="cancel-deadline-icon">⏰</span>
+                                                    <span class="cancel-deadline-text">
+                                                        @if (deadlineMsk.Value > nowMsk)
+                                                        {
+                                                            <span>Отменить можно до @deadlineMsk.Value.ToString("dd.MM.yyyy HH:mm")</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="expired">❌ Отмена недоступна (менее 12 часов до начала)</span>
+                                                        }
+                                                    </span>
+                                                </div>
+                                            }
+                                        }
+                                        <button class="btn btn-details" @onclick="() => OpenDetails(booking)">Подробнее</button>
+
+                                        @if (booking.Status == "pending")
+                                        {
+                                            <button class="btn btn-edit" @onclick="() => EditBookingAsync(booking)">Редактировать</button>
+                                            <button class="btn btn-cancel-bookings" @onclick="() => OpenCancelModal(booking)">Отменить</button>
+                                        }
+                                        else if (booking.Status == "paid")
+                                        {
+                                            <button class="btn btn-edit" @onclick="() => EditBookingAsync(booking)">Редактировать</button>
+
+                                            @if (cancelDeadlines.TryGetValue(booking.BookingId, out var paidDeadline) && paidDeadline.HasValue && paidDeadline.Value > DateTime.Now)
+                                            {
+                                                <button class="btn btn-cancel-money" @onclick="() => OpenCancelModal(booking)">Отменить</button>
+                                            }
+                                            else if (cancelDeadlines.TryGetValue(booking.BookingId, out var paidExpired) && paidExpired.HasValue && paidExpired.Value <= DateTime.Now)
+                                            {
+                                                <button class="btn btn-cancel-disabled" disabled title="Отмена недоступна (менее 12 часов до начала)">Отмена недоступна</button>
+                                            }
+                                        }
+                                        else if (booking.Status == "confirmed")
+                                        {
+                                            @if (cancelDeadlines.TryGetValue(booking.BookingId, out var confirmedDeadline) && confirmedDeadline.HasValue && confirmedDeadline.Value > DateTime.Now)
+                                            {
+                                                <button class="btn btn-cancel-bookings" @onclick="() => OpenCancelModal(booking)">Отменить</button>
+                                            }
+                                            else if (cancelDeadlines.TryGetValue(booking.BookingId, out var confirmedExpired) && confirmedExpired.HasValue && confirmedExpired.Value <= DateTime.Now)
+                                            {
+                                                <button class="btn btn-cancel-disabled" disabled title="Отмена недоступна (менее 12 часов до начала)">Отмена недоступна</button>
+                                            }
+                                        }
+                                    </div>
+
+                                </div>
+                            }
+                           
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="empty-bookings">
+                            <p>У вас пока нет бронирований</p>
+                            <a href="/studios" class="btn btn-primary">Выбрать студию</a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Модальное окно редактирования ПРОФИЛЯ -->
+        @if (isEditProfileModalOpen)
+        {
+            <div class="modal-overlay active" @onclick="CloseEditProfileModal">
+                <div class="modal-content edit-profile-modal" @onclick:stopPropagation="true">
+                    <button class="modal-close-btn" @onclick="CloseEditProfileModal">×</button>
+                    <h3 style="color: var(--gold); margin-bottom: 20px;">Редактирование профиля</h3>
+
+                    <div class="edit-profile-field">
+                        <label>ФИО:</label>
+                        <input @bind="editProfileModel.FullName" class="edit-input" />
+                    </div>
+
+                    <div class="edit-profile-field">
+                        <label>Телефон:</label>
+                        <input @bind="editProfileModel.Phone" class="edit-input" placeholder="+7 (XXX) XXX-XX-XX" />
+                    </div>
+
+                    <div class="edit-profile-field">
+                        <label>Email:</label>
+                        <input @bind="editProfileModel.Email" class="edit-input" type="email" />
+                    </div>
+
+                    <div class="edit-profile-buttons">
+                        <button class="btn btn-primary" @onclick="SaveProfileChanges" disabled="@isSavingProfile">
+                            @if (isSavingProfile)
+                            {
+                                <span>Сохранение...</span>
+                            }
+                            else
+                            {
+                                <span>Сохранить изменения</span>
+                            }
+                        </button>
+                        <button type="button" class="btn btn-cancel" @onclick="CloseEditProfileModal">Отмена</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Модальное окно деталей бронирования -->
+        @if (selectedBooking != null)
+        {
+            <div class="modal-overlay active" @onclick="CloseDetails">
+                <div class="modal-content" @onclick:stopPropagation="true">
+                    <button class="modal-close-btn" @onclick="CloseDetails">×</button>
+                    <h3 style="color: var(--gold); margin-bottom: 20px;">Детали бронирования</h3>
+
+                    <div style="margin-bottom: 15px;">
+                        <p><strong style="color: var(--text-gray);">Студия:</strong> <span style="color: var(--text-white); font-size: 18px;">@selectedBooking.StudioName</span></p>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                        <div>
+                            <p style="color: var(--text-gray); margin: 0 0 5px 0;">Дата:</p>
+                            <p style="color: var(--text-white); margin: 0;">@selectedBooking.BookingDate.ToString("dd.MM.yyyy")</p>
+                        </div>
+                        <div>
+                            <p style="color: var(--text-gray); margin: 0 0 5px 0;">Время:</p>
+                            <p style="color: var(--text-white); margin: 0;">@selectedBooking.SlotTime</p>
+                        </div>
+                        <div>
+                            <p style="color: var(--text-gray); margin: 0 0 5px 0;">Статус:</p>
+                            <p style="color: var(--text-white); margin: 0;">@GetStatusText(selectedBooking.Status)</p>
+                        </div>
+                        <div>
+                            <p style="color: var(--text-gray); margin: 0 0 5px 0;">Сумма:</p>
+                            <p style="color: var(--gold); margin: 0; font-weight: 600;">@selectedBooking.TotalPrice.ToString("N0") ₽</p>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(selectedBooking.Comment))
+                    {
+                        <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 3px solid var(--gold);">
+                            <p style="color: var(--text-gray); margin: 0 0 5px 0;">Комментарий:</p>
+                            <p style="color: var(--text-white); margin: 0; font-style: italic;">@selectedBooking.Comment</p>
+                        </div>
+                    }
+
+                    <div style="margin-top: 20px;">
+                        <h4 style="color: var(--gold); margin-bottom: 10px;">Оборудование:</h4>
+                        @if (selectedBooking.EquipmentList.Any())
+                        {
+                            <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 10px;">
+                                <ul style="margin: 0; padding-left: 20px; color: var(--text-gray);">
+                                    @foreach (var eq in selectedBooking.EquipmentList)
+                                    {
+                                        <li style="margin-bottom: 8px; color: var(--text-white);">
+                                            @eq.Name — @eq.Quantity шт. <span style="color: var(--gold);">(@eq.RentalPrice.ToString("N0") ₽/шт)</span>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                        else
+                        {
+                            <p style="color: var(--text-gray);">Оборудование не выбрано</p>
+                        }
+                    </div>
+
+                    <button class="btn btn-primary" @onclick="CloseDetails" style="margin-top: 25px; width: 100%;">Закрыть</button>
+                </div>
+            </div>
+        }
+
+        <!-- Модальное окно редактирования бронирования -->
+        @if (editingBooking != null)
+        {
+            <div class="modal-overlay active" @onclick="CloseEditBooking">
+                <div class="modal-content edit-modal" @onclick:stopPropagation="true">
+                    <button class="modal-close-btn" @onclick="CloseEditBooking">×</button>
+                    <h3 style="color: var(--gold); margin-bottom: 5px;">Редактирование бронирования</h3>
+                    <p style="color: var(--text-gray); margin-bottom: 20px;">
+                        @editingBooking.StudioName — @editingBooking.BookingDate.ToString("dd.MM.yyyy"), @editingBooking.SlotTime
+                    </p>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="color: var(--text-gray); display: block; margin-bottom: 8px;">Комментарий:</label>
+                        <textarea @bind="editComment"
+                                  class="edit-textarea"
+                                  rows="3"
+                                  placeholder="Добавьте комментарий к бронированию..."></textarea>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="color: var(--text-gray); display: block; margin-bottom: 8px;">Оборудование:</label>
+
+                        @if (isLoadingEquipment)
+                        {
+                            <div style="text-align: center; padding: 20px;">
+                                <span>Загрузка оборудования...</span>
+                            </div>
+                        }
+                        else if (availableEquipmentList.Any())
+                        {
+                            <div class="equipment-list-edit">
+                                @foreach (var eq in availableEquipmentList)
+                                {
+                                    var existingQty = editingBooking.SelectedEquipment.FirstOrDefault(e => e.EquipmentId == eq.EquipmentId)?.Quantity ?? 0;
+                                    var currentQty = editEquipmentQuantities.ContainsKey(eq.EquipmentId)
+                                    ? editEquipmentQuantities[eq.EquipmentId]
+                                    : existingQty;
+
+                                    // Максимум = уже есть + сколько можно добавить (но не больше общего количества!)
+                                    var maxPossible = Math.Min(eq.Quantity, existingQty + eq.AvailableQuantity);
+
+                                    <div class="equipment-item-edit">
+                                        <div class="equipment-info">
+                                            <span class="equipment-name">@eq.Name</span>
+                                            <span class="equipment-price">@eq.RentalPrice.ToString("N0") ₽/ч</span>
+                                            <div class="equipment-stock-details">
+                                                <span>Всего: @eq.Quantity шт.</span>
+                                                <span>Забронировано: @existingQty шт.</span>
+                                                <span>Доступно: @eq.AvailableQuantity шт.</span>
+
+                                            </div>
+                                        </div>
+                                        <div class="equipment-controls">
+                                            <button type="button" class="qty-btn"
+                                                    @onclick="() => ChangeEquipmentQuantity(eq.EquipmentId, -1)"
+                                                    disabled="@(currentQty <= 0)">
+                                                -
+                                            </button>
+                                            <span class="equipment-qty">@currentQty</span>
+                                            <button type="button" class="qty-btn"
+                                                    @onclick="() => ChangeEquipmentQuantity(eq.EquipmentId, 1)"
+                                                    disabled="@(currentQty >= maxPossible)">
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p style="color: var(--text-gray);">Нет доступного оборудования</p>
+                        }
+                    </div>
+
+                    <!-- Блок с информацией о доплате (если бронь уже оплачена) -->
+                    @if (editingBooking.IsPaid)
+                    {
+                        <div style="margin-top: 20px; padding: 15px; background: rgba(255, 70, 70, 0.1); border-radius: 12px; border: 1px solid #ff6b35;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="color: var(--text-gray); font-size: 16px;">Текущая стоимость:</span>
+                                <span style="color: var(--gold); font-size: 24px; font-weight: 700;">@editingBooking.OriginalTotalPrice.ToString("N0") ₽</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                                <span style="color: var(--text-gray); font-size: 16px;">Новая стоимость:</span>
+                                <span style="color: var(--gold); font-size: 24px; font-weight: 700;">@editingBooking.TotalPrice.ToString("N0") ₽</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.2);">
+                                <span style="color: var(--text-gray); font-size: 16px; font-weight: bold;">Доплата:</span>
+                                <span style="color: @(GetAdditionalPaymentAmount() > 0 ? "#ff6b35" : "#32cd32"); font-size: 24px; font-weight: 700;">
+                                    @(GetAdditionalPaymentAmount() > 0 ? $"+ {GetAdditionalPaymentAmount():N0} ₽" : (GetAdditionalPaymentAmount() < 0 ? $"{GetAdditionalPaymentAmount():N0} ₽" : "0 ₽"))
+                                </span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-gray); margin-top: 10px;">
+                                @if (GetAdditionalPaymentAmount() > 0)
+                                {
+                                    <span>После сохранения изменений потребуется доплатить @GetAdditionalPaymentAmount():N0 ₽</span>
+                                }
+                                else if (GetAdditionalPaymentAmount() < 0)
+                                {
+                                    <span>Стоимость уменьшилась на @Math.Abs(GetAdditionalPaymentAmount()):N0 ₽. Средства будут возвращены на карту в течение 5-10 рабочих дней.</span>
+                                }
+                                else
+                                {
+                                    <span>Стоимость не изменилась.</span>
+                                }
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-gray); margin-top: 5px;">
+                                * Стоимость обновляется автоматически при изменении оборудования
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Блок с общей стоимостью для неоплаченных броней -->
+                        <div style="margin-top: 20px; padding: 15px; background: rgba(255,215,0,0.1); border-radius: 12px; border: 1px solid var(--gold-border);">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="color: var(--text-gray); font-size: 16px;">Итого стоимость:</span>
+                                <span style="color: var(--gold); font-size: 24px; font-weight: 700;">@editingBooking.TotalPrice.ToString("N0") ₽</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-gray); margin-top: 5px;">
+                                * Стоимость обновляется автоматически при изменении оборудования
+                            </div>
+                        </div>
+                    }
+                    <div style="display: flex; gap: 12px; margin-top: 20px;">
+                        <button class="btn btn-primary" @onclick="SaveEditBooking" style="flex: 1;" disabled="@isSavingEdit">
+                            @if (isSavingEdit)
+                            {
+                                <span>Сохранение...</span>
+                            }
+                            else
+                            {
+                                <span>Сохранить изменения</span>
+                            }
+                        </button>
+                        <button class="btn btn-cancel" @onclick="CloseEditBooking" style="flex: 1;">Отмена</button>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div style="text-align: center; padding: 50px;">
+            <h3>Перенаправление на страницу входа...</h3>
+        </div>
+    }
+</div>
+
+<div style="display: none;">
+    @foreach (var b in userBookings)
+    {
+        <span>ID: @b.BookingId, Status: '@b.Status'</span>
+    }
+</div>
+
+
+<!-- Модальное окно доплаты -->
+@if (isAdditionalPaymentModalOpen && additionalPaymentBooking != null)
+{
+    <div class="modal-overlay active" @onclick="CloseAdditionalPaymentModal">
+        <div class="modal-content payment-modal" @onclick:stopPropagation="true">
+            <button class="modal-close-btn" @onclick="CloseAdditionalPaymentModal">×</button>
+
+            <h3 style="color: var(--gold); margin-bottom: 20px;">Доплата за изменения</h3>
+
+            <div class="payment-booking-info">
+                <div class="info-row">
+                    <span class="label">Студия:</span>
+                    <span class="value">@additionalPaymentBooking.StudioName</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Дата:</span>
+                    <span class="value">@additionalPaymentBooking.BookingDate.ToString("dd.MM.yyyy")</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Время:</span>
+                    <span class="value">@additionalPaymentBooking.SlotTime</span>
+                </div>
+                <div class="info-row total">
+                    <span class="label">Сумма доплаты:</span>
+                    <span class="value price">@additionalPaymentAmount.ToString("N0") ₽</span>
+                </div>
+            </div>
+
+            <!-- Форма оплаты (та же, что и в обычном окне) -->
+            <div class="payment-form">
+                <div class="form-group">
+                    <label>Номер карты</label>
+                    <input type="text" class="form-control" placeholder="0000 0000 0000 0000" maxlength="19" @bind="cardNumber" @oninput="OnCardNumberInput" />
+                </div>
+                <div class="form-row two-columns">
+                    <div class="form-group">
+                        <label>Срок действия</label>
+                        <input type="text" class="form-control" placeholder="MM/YY" maxlength="5" @bind="cardExpiry" @oninput="OnExpiryInput" />
+                    </div>
+                    <div class="form-group">
+                        <label>CVV/CVC</label>
+                        <input type="password" class="form-control" placeholder="***" maxlength="3" @bind="cardCvv" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Владелец карты</label>
+                    <input type="text" class="form-control" placeholder="IVANOV IVAN" @bind="cardHolder" />
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-pay-submit" @onclick="ProcessAdditionalPayment" disabled="@isPaymentProcessing">
+                    @if (isPaymentProcessing)
+                    {
+                        <span>Обработка...</span>
+                    }
+                    else
+                    {
+                        <span>Доплатить @additionalPaymentAmount.ToString("N0") ₽</span>
+                    }
+                </button>
+                <button class="btn-secondary" @onclick="CloseAdditionalPaymentModal">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+}
+<!-- Модальное окно отмены бронирования -->
+@if (isCancelModalOpen && cancelBooking != null)
+{
+    <div class="modal-overlay active" @onclick="CloseCancelModal">
+        <div class="modal-content cancel-modal" @onclick:stopPropagation="true">
+            <button class="modal-close-btn" @onclick="CloseCancelModal">×</button>
+
+            
+
+            <h3 class="cancel-modal-title">
+                @if (cancelBooking.Status == "paid")
+                {
+                    <span>Отмена бронирования с возвратом</span>
+                }
+                else
+                {
+                    <span>Отмена бронирования</span>
+                }
+            </h3>
+
+            <div class="cancel-booking-info">
+                <div class="info-row">
+                    <span class="label">Студия:</span>
+                    <span class="value">@cancelBooking.StudioName</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Дата:</span>
+                    <span class="value">@cancelBooking.BookingDate.ToString("dd.MM.yyyy")</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Время:</span>
+                    <span class="value">@cancelBooking.SlotTime</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Стоимость:</span>
+                    <span class="value price">@cancelBooking.TotalPrice.ToString("N0") ₽</span>
+                </div>
+            </div>
+
+            @if (cancelBooking.Status == "paid")
+            {
+                <div class="refund-warning">
+
+                    <div class="warning-text">
+                        <strong>Внимание!</strong><br />
+                        Сумма <strong>@cancelBooking.TotalPrice.ToString("N0") ₽</strong> будет возвращена на ту же карту<br />
+                        в течение 5-10 рабочих дней.
+                    </div>
+                </div>
+            }
+
+            @if (cancelDeadlines.TryGetValue(cancelBooking.BookingId, out var deadline) && deadline.HasValue)
+            {
+                var deadlineMsk = deadline.Value.AddHours(3);
+                <div class="cancel-deadline-info">
+
+                    <span>Вы можете отменить бронь до @deadlineMsk.ToString("dd.MM.yyyy HH:mm")</span>
+                </div>
+            }
+
+            <div class="cancel-modal-actions">
+                <button class="btn-confirm-cancel" @onclick="ProcessCancellation" disabled="@isCancelling">
+                    @if (isCancelling)
+                    {
+                        <span>Отмена...</span>
+                    }
+                    else
+                    {
+                        <span>Отменить</span>
+                    }
+                </button>
+                <button class="btn-secondary-cancel" @onclick="CloseCancelModal">
+                    Не отменять
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+
+
+@code {
+    private bool isLoading = true;
+    private bool isAuthenticated = false;
+    private string userFullName = "";
+    private string userEmail = "";
+    private string userPhone = "Не указан";
+    private string userCreatedAt = "";
+    private int totalBookings = 0;
+    private int completedBookings = 0;
+    private decimal totalSpent = 0;
+    private List<UserBookingFullViewModel> userBookings = new();
+    private UserBookingFullViewModel? selectedBooking = null;
+    private bool isEditProfileModalOpen = false;
+    private EditProfileModel editProfileModel = new();
+    private bool isSavingProfile = false;
+    private EditBookingModel? editingBooking = null;
+    private string editComment = "";
+    private Dictionary<int, int> editEquipmentQuantities = new();
+    private List<EquipmentViewModel> availableEquipmentList = new();
+    private bool isLoadingEquipment = false;
+    private bool isSavingEdit = false;
+    private bool isProcessing = false;
+    private bool isPaymentProcessing = false;
+    private string cardNumber = "";
+    private string cardExpiry = "";
+    private string cardCvv = "";
+    private string cardHolder = "";
+    private bool isAdditionalPaymentModalOpen = false;
+    private UserBookingFullViewModel? additionalPaymentBooking = null;
+    private decimal additionalPaymentAmount = 0;
+    private Dictionary<int, DateTime?> cancelDeadlines = new();
+    private bool isCancelModalOpen = false;
+    private UserBookingFullViewModel? cancelBooking = null;
+    private bool isCancelling = false;
+
+    private async Task ProcessCancellation()
+    {
+        if (cancelBooking == null) return;
+
+        isCancelling = true;
+        StateHasChanged();
+
+        try
+        {
+            bool success = false;
+
+            if (cancelBooking.Status == "pending")
+            {
+                success = await UserService.CancelBookingAsync(cancelBooking.BookingId);
+            }
+            else if (cancelBooking.Status == "paid")
+            {
+                success = await UserService.CancelPaidBookingAsync(cancelBooking.BookingId);
+            }
+            else if (cancelBooking.Status == "confirmed")
+            {
+                success = await UserService.CancelConfirmedBookingAsync(cancelBooking.BookingId);
+            }
+
+            if (success)
+            {
+                await LoadUserBookings(await GetCurrentUserId());
+                StateHasChanged();
+
+                var message = cancelBooking.Status == "paid"
+                    ? $" Бронирование отменено!\n\nСумма {cancelBooking.TotalPrice:N0} ₽ будет возвращена на вашу карту в течение 5-10 рабочих дней."
+                    : " Бронирование успешно отменено";
+
+                await JS.InvokeVoidAsync("alert", message);
+                CloseCancelModal();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", " Не удалось отменить бронирование. Возможно, до начала осталось менее 12 часов.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error cancelling booking: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", " Ошибка при отмене бронирования");
+        }
+        finally
+        {
+            isCancelling = false;
+        }
+    }
+
+
+    private void OpenCancelModal(UserBookingFullViewModel booking)
+    {
+        cancelBooking = booking;
+        isCancelModalOpen = true;
+        StateHasChanged();
+    }
+
+    private void CloseCancelModal()
+    {
+        isCancelModalOpen = false;
+        cancelBooking = null;
+        StateHasChanged();
+    }
+
+    private async Task CancelConfirmedBooking(UserBookingFullViewModel booking)
+    {
+        var canCancel = await CanCancelBooking(booking);
+
+        if (!canCancel.CanCancel)
+        {
+            await JS.InvokeVoidAsync("alert", canCancel.Message);
+            return;
+        }
+
+        if (!await JS.InvokeAsync<bool>("confirm",
+            $" Отменить подтверждённое бронирование?\n\n" +
+            $"Бронирование: {booking.StudioName}\n" +
+            $"Дата: {booking.BookingDate:dd.MM.yyyy}\n" +
+            $"Время: {booking.SlotTime}\n\n" +
+            $"{canCancel.Message}\n\n" +
+            $"Продолжить отмену?"))
+            return;
+
+        var success = await UserService.CancelConfirmedBookingAsync(booking.BookingId);
+        if (success)
+        {
+            await LoadUserBookings(await GetCurrentUserId());
+            StateHasChanged();
+            await JS.InvokeVoidAsync("alert", "Бронирование успешно отменено");
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", " Не удалось отменить бронирование");
+        }
+    }
+    
+    private async Task CancelPaidBooking(UserBookingFullViewModel booking)
+    {
+        var canCancel = await CanCancelBooking(booking);
+
+        if (!canCancel.CanCancel)
+        {
+            await JS.InvokeVoidAsync("alert", canCancel.Message);
+            return;
+        }
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm",
+            $" ВОЗВРАТ СРЕДСТВ\n\n" +
+            $"Бронирование: {booking.StudioName}\n" +
+            $"Дата: {booking.BookingDate:dd.MM.yyyy}\n" +
+            $"Время: {booking.SlotTime}\n" +
+            $"Сумма к возврату: {booking.TotalPrice:N0} ₽\n\n" +
+            $"{canCancel.Message}\n\n" +
+            $"Деньги вернутся на ту же карту в течение 5-10 рабочих дней.\n\n" +
+            $"Продолжить отмену?");
+
+        if (!confirmed) return;
+
+        isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            var success = await UserService.CancelPaidBookingAsync(booking.BookingId);
+
+            if (success)
+            {
+                await LoadUserBookings(await GetCurrentUserId());
+                StateHasChanged();
+                await JS.InvokeVoidAsync("alert",
+                    $"Бронирование отменено!\n\n" +
+                    $"Сумма {booking.TotalPrice:N0} ₽ будет возвращена на вашу карту в течение 5-10 рабочих дней.");
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Не удалось отменить бронирование. Возможно, до начала осталось менее 12 часов.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error canceling paid booking: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", " Ошибка при отмене бронирования");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+
+
+    private async Task LoadCancelDeadlines()
+    {
+        cancelDeadlines.Clear();
+
+        var nowMsk = DateTime.UtcNow.AddHours(3);
+
+        foreach (var booking in userBookings)
+        {
+            if (booking.Status == "paid" || booking.Status == "pending" || booking.Status == "confirmed")
+            {
+                var startTimeMsk = await UserService.GetBookingStartTimeAsync(booking.BookingId);
+                if (startTimeMsk.HasValue)
+                {
+                    var deadlineMsk = startTimeMsk.Value.AddHours(-12);
+                    cancelDeadlines[booking.BookingId] = deadlineMsk;
+
+                    Console.WriteLine($"Booking {booking.BookingId}: Начало МСК={startTimeMsk.Value:dd.MM.yyyy HH:mm}, Дедлайн МСК={deadlineMsk:dd.MM.yyyy HH:mm}, Сейчас МСК={nowMsk:dd.MM.yyyy HH:mm}");
+                }
+            }
+        }
+    }
+
+    private decimal GetAdditionalPaymentAmount()
+    {
+        if (editingBooking == null) return 0;
+        return editingBooking.TotalPrice - editingBooking.OriginalTotalPrice;
+    }
+    private async Task<DateTime?> GetCancelDeadline(int bookingId)
+    {
+        var startTime = await UserService.GetBookingStartTimeAsync(bookingId);
+        return startTime?.AddHours(-12);
+    }
+
+    private void OpenAdditionalPaymentModal(UserBookingFullViewModel booking, decimal amount)
+    {
+        additionalPaymentBooking = booking;
+        additionalPaymentAmount = amount;
+        isAdditionalPaymentModalOpen = true;
+        cardNumber = "";
+        cardExpiry = "";
+        cardCvv = "";
+        cardHolder = "";
+        StateHasChanged();
+    }
+
+    private void CloseAdditionalPaymentModal()
+    {
+        isAdditionalPaymentModalOpen = false;
+        additionalPaymentBooking = null;
+        additionalPaymentAmount = 0;
+        StateHasChanged();
+    }
+
+    private async Task ProcessAdditionalPayment()
+    {
+        if (!ValidatePaymentForm()) return;
+
+        isPaymentProcessing = true;
+        StateHasChanged();
+
+        await Task.Delay(1500);
+
+        try
+        {
+            await JS.InvokeVoidAsync("alert", $"Доплата {additionalPaymentAmount:N0} ₽ успешно произведена!");
+            CloseAdditionalPaymentModal();
+
+            var userId = await GetCurrentUserId();
+            await LoadUserBookings(userId);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error processing additional payment: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Ошибка при доплате");
+        }
+        finally
+        {
+            isPaymentProcessing = false;
+        }
+    }
+
+
+    private void OnCardNumberInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString()?.Replace(" ", "") ?? "";
+        if (value.Length > 16) value = value[..16];
+
+        var formatted = "";
+        for (int i = 0; i < value.Length; i++)
+        {
+            if (i > 0 && i % 4 == 0)
+                formatted += " ";
+            formatted += value[i];
+        }
+        cardNumber = formatted;
+        StateHasChanged();
+    }
+
+    private void OnExpiryInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString()?.Replace("/", "") ?? "";
+        if (value.Length > 4) value = value[..4];
+
+        if (value.Length >= 3)
+        {
+            cardExpiry = $"{value[..2]}/{value[2..]}";
+        }
+        else
+        {
+            cardExpiry = value;
+        }
+        StateHasChanged();
+    }
+
+
+    private void FormatCardNumber(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString()?.Replace(" ", "") ?? "";
+        if (value.Length > 16) value = value[..16];
+
+        var formatted = "";
+        for (int i = 0; i < value.Length; i++)
+        {
+            if (i > 0 && i % 4 == 0)
+                formatted += " ";
+            formatted += value[i];
+        }
+        cardNumber = formatted;
+    }
+
+    private void FormatExpiry(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString()?.Replace("/", "") ?? "";
+        if (value.Length > 4) value = value[..4];
+
+        if (value.Length >= 3)
+        {
+            cardExpiry = $"{value[..2]}/{value[2..]}";
+        }
+        else
+        {
+            cardExpiry = value;
+        }
+    }
+
+    private bool ValidatePaymentForm()
+    {
+        var cardNumberClean = cardNumber.Replace(" ", "");
+        if (cardNumberClean.Length != 16)
+        {
+            JS.InvokeVoidAsync("alert", "Введите корректный номер карты (16 цифр)");
+            return false;
+        }
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(cardExpiry, @"^(0[1-9]|1[0-2])\/(2[5-9]|[3-9][0-9])$"))
+        {
+            JS.InvokeVoidAsync("alert", "Введите корректную дату окончания (MM/YY)");
+            return false;
+        }
+
+        if (cardCvv.Length != 3 || !System.Text.RegularExpressions.Regex.IsMatch(cardCvv, @"^\d{3}$"))
+        {
+            JS.InvokeVoidAsync("alert", "Введите корректный CVV код (3 цифры)");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(cardHolder) || cardHolder.Length < 3)
+        {
+            JS.InvokeVoidAsync("alert", "Введите имя владельца карты");
+            return false;
+        }
+
+        return true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+
+            var userRole = await JS.InvokeAsync<string>("localStorage.getItem", "userRole");
+            if (userRole == "Manager" || userRole == "Admin")
+            {
+                Navigation.NavigateTo("/manager", true);
+                return;
+            }
+
+            await LoadProfile();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadProfile()
+    {
+        isLoading = true;
+
+        try
+        {
+            var userId = await JS.InvokeAsync<string>("localStorage.getItem", "userId");
+
+            if (!string.IsNullOrEmpty(userId))
+            {
+                isAuthenticated = true;
+                userFullName = await JS.InvokeAsync<string>("localStorage.getItem", "userName") ?? "";
+                userEmail = await JS.InvokeAsync<string>("localStorage.getItem", "userEmail") ?? "";
+
+                AppStateService.IsAuthenticated = true;
+                AppStateService.UserName = userFullName;
+
+                if (int.TryParse(userId, out int id))
+                {
+                    await LoadUserData(id);
+                }
+            }
+            else
+            {
+                isAuthenticated = false;
+                Navigation.NavigateTo("/login", true);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading profile: {ex.Message}");
+            isAuthenticated = false;
+            Navigation.NavigateTo("/login", true);
+            return;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadUserData(int userId)
+    {
+        try
+        {
+            var user = await UserService.GetUserByIdAsync(userId);
+            if (user != null)
+            {
+                userPhone = string.IsNullOrEmpty(user.Phone) ? "Не указан" : user.Phone;
+                userCreatedAt = user.CreatedAt.ToString("dd.MM.yyyy");
+                await LoadUserBookings(userId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading user data: {ex.Message}");
+        }
+    }
+
+    private async Task LoadUserBookings(int userId)
+    {
+        try
+        {
+            var bookings = await UserService.GetUserBookingsWithEquipmentAsync(userId);
+            userBookings = bookings;
+            totalBookings = bookings.Count;
+            completedBookings = bookings.Count(b => b.Status == "completed");
+            totalSpent = bookings.Where(b => b.Status == "paid" || b.Status == "completed").Sum(b => b.TotalPrice);
+            await LoadCancelDeadlines();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading bookings: {ex.Message}");
+        }
+    }
+
+    private void OpenEditProfileModal()
+    {
+        editProfileModel = new EditProfileModel
+        {
+            FullName = userFullName,
+            Phone = userPhone == "Не указан" ? "" : userPhone,
+            Email = userEmail
+        };
+        isEditProfileModalOpen = true;
+    }
+
+    private void CloseEditProfileModal()
+    {
+        isEditProfileModalOpen = false;
+        editProfileModel = new();
+    }
+    private async Task SaveProfileChanges()
+    {
+        isSavingProfile = true;
+        try
+        {
+            var userId = await GetCurrentUserId();
+            var updateData = new
+            {
+                FullName = editProfileModel.FullName,
+                Phone = editProfileModel.Phone,
+                Email = editProfileModel.Email
+            };
+
+            var success = await UserService.UpdateUserProfileAsync(userId, updateData);
+
+            if (success)
+            {
+                userFullName = editProfileModel.FullName;
+                userEmail = editProfileModel.Email;
+                userPhone = string.IsNullOrEmpty(editProfileModel.Phone) ? "Не указан" : editProfileModel.Phone;
+
+                await JS.InvokeVoidAsync("localStorage.setItem", "userName", userFullName);
+                await JS.InvokeVoidAsync("localStorage.setItem", "userEmail", userEmail);
+                AppStateService.UserName = userFullName;
+
+                CloseEditProfileModal();
+                await JS.InvokeVoidAsync("alert", "Профиль успешно обновлён!");
+                StateHasChanged();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Не удалось обновить профиль. Возможно, email уже используется.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving profile: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Ошибка при сохранении профиля");
+        }
+        finally
+        {
+            isSavingProfile = false;
+        }
+    }
+
+    private void OpenDetails(UserBookingFullViewModel booking)
+    {
+        selectedBooking = booking;
+    }
+
+    private void CloseDetails()
+    {
+        selectedBooking = null;
+    }
+
+    private async Task CancelBooking(UserBookingFullViewModel booking)
+    {
+        var canCancel = await CanCancelBooking(booking);
+
+        if (!canCancel.CanCancel)
+        {
+            await JS.InvokeVoidAsync("alert", canCancel.Message);
+            return;
+        }
+
+        if (!await JS.InvokeAsync<bool>("confirm", $" Отменить бронь в {booking.StudioName} на {booking.BookingDate:dd.MM.yyyy} {booking.SlotTime}?\n\n{canCancel.Message}"))
+            return;
+
+        var success = await UserService.CancelBookingAsync(booking.BookingId);
+        if (success)
+        {
+            await LoadUserBookings(await GetCurrentUserId());
+            StateHasChanged();
+            await JS.InvokeVoidAsync("alert", "Бронирование успешно отменено");
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", "Не удалось отменить бронь");
+        }
+    }
+
+    private async Task<(bool CanCancel, string Message)> CanCancelBooking(UserBookingFullViewModel booking)
+    {
+
+        var startTimeMsk = await UserService.GetBookingStartTimeAsync(booking.BookingId);
+
+        if (!startTimeMsk.HasValue)
+        {
+            return (false, "Не удалось определить время начала бронирования");
+        }
+
+        var nowMsk = DateTime.UtcNow.AddHours(3);
+
+        var hoursBeforeStart = (startTimeMsk.Value - nowMsk).TotalHours;
+
+
+        if (startTimeMsk.Value <= nowMsk)
+        {
+            return (false, "Нельзя отменить бронирование, которое уже началось или завершилось");
+        }
+
+        if (hoursBeforeStart < 12)
+        {
+            var remainingHours = (int)Math.Floor(hoursBeforeStart);
+            var remainingMinutes = (int)((hoursBeforeStart - remainingHours) * 60);
+
+            if (remainingHours > 0)
+                return (false, $"Отмена невозможна! До начала осталось {remainingHours} ч {remainingMinutes} мин. Отменить можно не менее чем за 12 часов.");
+            else
+                return (false, $"Отмена невозможна! До начала осталось {remainingMinutes} мин. Отменить можно не менее чем за 12 часов.");
+        }
+
+        return (true, $" Вы можете отменить бронь. До начала осталось {hoursBeforeStart:F0} часов.");
+    }
+
+    private async Task EditBookingAsync(UserBookingFullViewModel booking)
+    {
+        isLoading = true;
+        try
+        {
+            var editData = await UserService.GetBookingForEditAsync(booking.BookingId);
+
+            if (editData == null)
+            {
+                await JS.InvokeVoidAsync("alert", "Это бронирование больше нельзя редактировать");
+                return;
+            }
+
+            editingBooking = editData;
+            editComment = editData.Comment ?? "";
+
+            await LoadAvailableEquipmentForEdit();
+            foreach (var eq in availableEquipmentList)
+            {
+                var existingQty = editingBooking.SelectedEquipment.FirstOrDefault(e => e.EquipmentId == eq.EquipmentId)?.Quantity ?? 0;
+                Console.WriteLine($"Оборудование: {eq.Name}, Всего: {eq.Quantity}, Уже есть: {existingQty}, Доступно для добавления: {eq.AvailableQuantity}");
+            }
+
+            editEquipmentQuantities = editingBooking.SelectedEquipment
+                .ToDictionary(e => e.EquipmentId, e => e.Quantity);
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+             await JS.InvokeVoidAsync("alert", "Не удалось загрузить данные для редактирования");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+
+    private async Task LoadAvailableEquipmentForEdit()
+    {
+        if (editingBooking == null) return;
+
+        isLoadingEquipment = true;
+        try
+        {
+            availableEquipmentList = await UserService.GetAvailableEquipmentForBookingAsync(
+                editingBooking.StudioId,
+                editingBooking.BookingDate,
+                editingBooking.SlotId,
+                editingBooking.BookingId);
+            foreach (var eq in availableEquipmentList)
+            {
+                var existingQty = editingBooking.SelectedEquipment.FirstOrDefault(e => e.EquipmentId == eq.EquipmentId)?.Quantity ?? 0;
+                Console.WriteLine($"Оборудование: {eq.Name}");
+                Console.WriteLine($"  - Уже есть в брони: {existingQty}");
+                Console.WriteLine($"  - Максимум всего: {eq.Quantity}");
+                Console.WriteLine($"  - Доступно для добавления: {eq.AvailableQuantity}");
+                Console.WriteLine($"  - Итого можно иметь в этом брони: {existingQty + eq.AvailableQuantity}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading equipment: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingEquipment = false;
+        }
+    }
+
+    private async void ChangeEquipmentQuantity(int equipmentId, int delta)
+    {
+        if (!editEquipmentQuantities.ContainsKey(equipmentId))
+        {
+            editEquipmentQuantities[equipmentId] = 0;
+        }
+
+        int currentQty = editEquipmentQuantities[equipmentId];
+        int newQty = currentQty + delta;
+
+        var equipment = availableEquipmentList.FirstOrDefault(e => e.EquipmentId == equipmentId);
+        if (equipment == null) return;
+
+
+        var originalQty = editingBooking?.SelectedEquipment
+            .FirstOrDefault(e => e.EquipmentId == equipmentId)?.Quantity ?? 0;
+
+
+        int currentTotalInUi = currentQty;
+
+
+        int addedOverOriginal = currentTotalInUi - originalQty;
+
+        int maxTotal = originalQty + equipment.AvailableQuantity;
+
+        if (newQty >= 0 && newQty <= maxTotal)
+        {
+            if (newQty == 0)
+            {
+                editEquipmentQuantities.Remove(equipmentId);
+            }
+            else
+            {
+                editEquipmentQuantities[equipmentId] = newQty;
+            }
+
+            await RecalculateTotalPrice();
+            StateHasChanged();
+        }
+    }
+
+
+
+
+    private async Task RecalculateTotalPrice()
+    {
+        if (editingBooking == null) return;
+
+        try
+        {
+            var equipmentWithQuantity = editEquipmentQuantities
+                .Select(kvp => (EquipmentId: kvp.Key, Quantity: kvp.Value))
+                .ToList();
+
+            var newTotalPrice = await UserService.CalculatePriceWithQuantityAsync(
+                editingBooking.StudioId,
+                editingBooking.SlotId,
+                editingBooking.BookingDate,
+                equipmentWithQuantity);
+
+            editingBooking.TotalPrice = newTotalPrice;
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error recalculating price: {ex.Message}");
+        }
+    }
+
+
+    private void CloseEditBooking()
+    {
+        editingBooking = null;
+        editEquipmentQuantities.Clear();
+        availableEquipmentList.Clear();
+        editComment = "";
+    }
+
+    private async Task SaveEditBooking()
+    {
+        if (editingBooking == null) return;
+
+        try
+        {
+            isSavingEdit = true;
+
+            var equipmentList = editEquipmentQuantities
+                .Where(kvp => kvp.Value > 0)
+                .Select(kvp => (kvp.Key, kvp.Value))
+                .ToList();
+
+
+            var additionalPayment = await UserService.GetAdditionalPaymentAmountAsync(
+                editingBooking.BookingId, editComment, equipmentList);
+
+
+            var success = await UserService.UpdateBookingWithPaymentAsync(
+                editingBooking.BookingId,
+                editComment,
+                equipmentList,
+                additionalPayment);
+
+            if (success)
+            {
+                var userId = await GetCurrentUserId();
+                await LoadUserBookings(userId);
+
+
+                if (additionalPayment > 0)
+                {
+                    var updatedBooking = userBookings.FirstOrDefault(b => b.BookingId == editingBooking.BookingId);
+                    if (updatedBooking != null)
+                    {
+                        CloseEditBooking();
+                        OpenAdditionalPaymentModal(updatedBooking, additionalPayment);
+                    }
+                }
+                else if (additionalPayment < 0)
+                {
+                    await JS.InvokeVoidAsync("alert",
+                        $"Бронирование обновлено. Стоимость уменьшена на {Math.Abs(additionalPayment):N0} ₽. " +
+                        "Средства будут возвращены на вашу карту в течение 5-10 рабочих дней.");
+                    CloseEditBooking();
+                    StateHasChanged();
+                }
+                else
+                {
+                    await JS.InvokeVoidAsync("alert", "Бронирование успешно обновлено");
+                    CloseEditBooking();
+                    StateHasChanged();
+                }
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Не удалось обновить бронирование. Возможно, оборудование уже забронировано.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving booking: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Ошибка при сохранении изменений");
+        }
+        finally
+        {
+            isSavingEdit = false;
+        }
+    }
+
+    private void GoToBooking()
+    {
+        Navigation.NavigateTo("/studios");
+    }
+
+    private async Task<int> GetCurrentUserId()
+    {
+        var id = await JS.InvokeAsync<string>("localStorage.getItem", "userId");
+        return int.TryParse(id, out int result) ? result : 0;
+    }
+
+    private string GetStatusText(string status) => status switch
+    {
+        "pending" => "Ожидает подтверждения",
+        "confirmed" => "Подтверждено",
+        "paid" => "Оплачено",
+        "completed" => "Завершено",
+        "cancelled" => "Отменено",
+        _ => status
+    };
+
+    private async Task Logout()
+    {
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userId");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userEmail");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userName");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userRole");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "isAuthenticated");
+
+        AppStateService.IsAuthenticated = false;
+        AppStateService.UserName = "";
+
+        Navigation.NavigateTo("/", true);
+    }
+
+
+    private async Task PayForBooking(UserBookingFullViewModel booking)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm",
+            $"💳 Оплата бронирования\n\n" +
+            $"Студия: {booking.StudioName}\n" +
+            $"Дата: {booking.BookingDate:dd.MM.yyyy}\n" +
+            $"Время: {booking.SlotTime}\n" +
+            $"Сумма: {booking.TotalPrice:N0} ₽\n\n" +
+            $"Нажмите ОК для оплаты");
+
+        if (!confirmed) return;
+
+        try
+        {
+            var success = await UserService.PayForBookingAsync(booking.BookingId);
+
+            if (success)
+            {
+                await JS.InvokeVoidAsync("alert", "Оплата прошла успешно!");
+                var userId = await GetCurrentUserId();
+                await LoadUserBookings(userId);
+                StateHasChanged();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Ошибка при оплате. Статус бронирования должен быть 'Подтверждено'.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error paying for booking: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Произошла ошибка при оплате");
+        }
+    }
+    public class EditProfileModel
+    {
+        public string FullName { get; set; } = "";
+        public string Phone { get; set; } = "";
+        public string Email { get; set; } = "";
+    }
+}
