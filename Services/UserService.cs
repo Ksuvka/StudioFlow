@@ -204,6 +204,7 @@ namespace StudioFlow.Services
             var studios = await _context.Studios
                 .Where(s => s.IsActive == true)
                 .Select(s => new StudioViewModel
+
                 {
                     StudioId = s.StudioId,
                     Name = s.Name,
@@ -218,7 +219,7 @@ namespace StudioFlow.Services
                     IsActive = s.IsActive == true
                 })
                 .ToListAsync();
-
+            Console.WriteLine($"Studios count: {studios.Count}");
             return studios;
         }
 
