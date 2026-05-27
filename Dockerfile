@@ -1,22 +1,22 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Копируем все файлы репозитория
 COPY . .
 
-# Восстанавливаем зависимости (используем .csproj в корне)
 RUN dotnet restore "StudioFlow.csproj"
 
-# Публикуем проект
-RUN dotnet publish "StudioFlow.csproj" -c Release -o /app/publish
+# Ограничиваем память при публикации
+RUN dotnet publish "StudioFlow.csproj" -c Release -o /app/publish \
+    /p:UseSharedCompilation=false
 
-# Финальный образ
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
 
-# Настройка порта для Render
 ENV ASPNETCORE_URLS=http://+:8080
+ENV DOTNET_GCHeapHardLimit=400000000
+ENV DOTNET_GCConserveMemory=9
+
 EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "StudioFlow.dll"]
