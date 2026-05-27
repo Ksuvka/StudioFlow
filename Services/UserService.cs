@@ -627,16 +627,18 @@ namespace StudioFlow.Services
             return result;
         }
 
-        public async Task<bool> CancelBookingAsync(int bookingId)
-        {
-            var booking = await _context.Bookings.FindAsync(bookingId);
-            if (booking == null || booking.Status != "pending")
-                return false;
+      public async Task<bool> CancelBookingAsync(int bookingId)
+{
+    var booking = await _context.Bookings.FindAsync(bookingId);
+    if (booking == null) return false;
 
-            booking.Status = "cancelled";
-            await _context.SaveChangesAsync();
-            return true;
-        }
+    if (booking.Status == "cancelled") return false;
+
+    booking.Status = "cancelled";
+    booking.CancelledAt = DateTime.UtcNow;
+    await _context.SaveChangesAsync();
+    return true;
+}
 
 
 
